@@ -1,0 +1,50 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function validChecklistPayload() {
+      return request.resource.data.keys().hasOnly([
+        'patientId',
+        'room',
+        'patientName',
+        'hasSelections',
+        'updatedAt',
+        'state'
+      ])
+      && request.resource.data.patientId is string
+      && request.resource.data.patientId.size() <= 120
+      && request.resource.data.room is string
+      && request.resource.data.room.size() <= 120
+      && request.resource.data.patientName is string
+      && request.resource.data.patientName.size() <= 200
+      && request.resource.data.hasSelections is bool
+      && request.resource.data.state is map;
+    }
+
+    function validArchivePayload() {
+      return request.resource.data.keys().hasAll([
+        'date',
+        'scopeKey',
+        'entries'
+      ])
+      && request.resource.data.date is string
+      && request.resource.data.date.size() <= 32
+      && request.resource.data.scopeKey is string
+      && request.resource.data.scopeKey.size() <= 160
+      && request.resource.data.entries is list
+      && request.resource.data.entries.size() <= 500;
+    }
+
+    match /patient_checklists/{docId} {
+      allow read: if true;
+      allow create, update: if validChecklistPayload();
+      allow delete: if true;
+    }
+
+    match /ed_orderset_archive/{docId} {
+      allow read: if true;
+      allow create, update: if validArchivePayload();
+      allow delete: if true;
+    }
+  }
+}
