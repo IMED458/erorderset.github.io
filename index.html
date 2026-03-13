@@ -408,7 +408,7 @@
 <div class="content">
 <p class="statusNote" id="archiveMeta" style="margin-top:0;"></p>
 <div class="search archiveSearch">
-<input aria-label="არქივში ძებნა" id="archiveSearch" placeholder="მოძებნე პაციენტის სახელი/გვარი ან კვლევა" type="text"/>
+<input aria-label="არქივში ძებნა" id="archiveSearch" placeholder="მოძებნე თარიღი, ER ექიმი, პაციენტი ან კვლევა" type="text"/>
 </div>
 <div class="archiveList" id="archiveGroups"></div>
 </div>
@@ -2524,6 +2524,14 @@ document.getElementById("expandAll").addEventListener("click", () => {
     const input = document.getElementById("archiveSearch");
     return norm(input?.value || "");
   }
+  function archiveDocMatches(doc, dateStr, needle){
+    if(!needle) return true;
+    const haystack = [
+      dateStr || "",
+      doc?.erDutyDoctor || ""
+    ].join(" ");
+    return norm(haystack).includes(needle);
+  }
   function archiveEntryMatches(entry, needle){
     if(!needle) return true;
     const haystack = [
@@ -2775,7 +2783,10 @@ document.getElementById("expandAll").addEventListener("click", () => {
     const dates = listArchiveDates();
     const matchedDocs = dates.map(dateStr => {
       const doc = loadArchiveDay(dateStr);
-      const entries = (doc?.entries || []).filter(entry => archiveEntryMatches(entry, needle));
+      const docMatched = archiveDocMatches(doc, dateStr, needle);
+      const entries = docMatched
+        ? (doc?.entries || [])
+        : (doc?.entries || []).filter(entry => archiveEntryMatches(entry, needle));
       return { dateStr, doc, entries };
     }).filter(({ entries }) => entries.length);
 
