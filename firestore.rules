@@ -35,6 +35,20 @@ service cloud.firestore {
       && request.resource.data.entries.size() <= 500;
     }
 
+    function validDailyPayload() {
+      return request.resource.data.keys().hasAll([
+        'date',
+        'scopeKey',
+        'entries'
+      ])
+      && request.resource.data.date is string
+      && request.resource.data.date.size() <= 32
+      && request.resource.data.scopeKey is string
+      && request.resource.data.scopeKey.size() <= 160
+      && request.resource.data.entries is list
+      && request.resource.data.entries.size() <= 500;
+    }
+
     match /patient_checklists/{docId} {
       allow read: if true;
       allow create, update: if validChecklistPayload();
@@ -44,6 +58,12 @@ service cloud.firestore {
     match /ed_orderset_archive/{docId} {
       allow read: if true;
       allow create, update: if validArchivePayload();
+      allow delete: if true;
+    }
+
+    match /ed_orderset_daily/{docId} {
+      allow read: if true;
+      allow create, update: if validDailyPayload();
       allow delete: if true;
     }
   }
