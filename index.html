@@ -289,6 +289,17 @@
       margin:0 0 10px 0;
       line-height:1.4;
     }
+    .archiveSearch{
+      margin:0 0 12px 0;
+    }
+    .archiveEmpty{
+      border:1px dashed var(--line);
+      border-radius:14px;
+      padding:14px;
+      color:var(--muted);
+      background:#f9fafb;
+      font-size:13px;
+    }
     .statusNote{
       color:var(--muted);
       font-size:12px;
@@ -396,6 +407,9 @@
 <h2>არქივი</h2>
 <div class="content">
 <p class="statusNote" id="archiveMeta" style="margin-top:0;"></p>
+<div class="search archiveSearch">
+<input aria-label="არქივში ძებნა" id="archiveSearch" placeholder="მოძებნე პაციენტის სახელი/გვარი ან კვლევა" type="text"/>
+</div>
 <div class="archiveList" id="archiveGroups"></div>
 </div>
 </section>
@@ -2506,6 +2520,19 @@ document.getElementById("expandAll").addEventListener("click", () => {
       return extra.length ? `${t.text} (${extra.join(" | ")})` : t.text;
     }).join("; ");
   }
+  function getArchiveSearchNeedle(){
+    const input = document.getElementById("archiveSearch");
+    return norm(input?.value || "");
+  }
+  function archiveEntryMatches(entry, needle){
+    if(!needle) return true;
+    const haystack = [
+      entry?.pt?.name || "",
+      renderEntryTestsText(entry) || "",
+      ...(entry?.tests || []).map(test => test?.text || "")
+    ].join(" ");
+    return norm(haystack).includes(needle);
+  }
   function restoreEntryIntoForm(entry){
     document.getElementById("resetChecks")?.click();
 
@@ -2693,8 +2720,9 @@ document.getElementById("expandAll").addEventListener("click", () => {
       });
     });
   }
-  function buildArchiveTable(doc){
-    const rows = (doc?.entries || []).map((entry, idx) => {
+  function buildArchiveTable(doc, entries){
+    const tableEntries = Array.isArray(entries) ? entries : (doc?.entries || []);
+    const rows = tableEntries.map((entry, idx) => {
       const ordered = summarizeOrderedTests(entry);
       const counts = countKinds(entry);
       return `
@@ -2743,13 +2771,31 @@ document.getElementById("expandAll").addEventListener("click", () => {
     const groups = document.getElementById("archiveGroups");
     if(!(card && meta && groups)) return;
 
+    const needle = getArchiveSearchNeedle();
     const dates = listArchiveDates();
-    meta.textContent = dates.length
-      ? `სკოპი: ${archiveScopeKey()} • არქივში დღეები: ${dates.length}`
-      : "არქივი ცარიელია.";
-    groups.innerHTML = dates.map(dateStr => {
+    const matchedDocs = dates.map(dateStr => {
       const doc = loadArchiveDay(dateStr);
-      const counts = (doc?.entries || []).reduce((acc, entry) => {
+      const entries = (doc?.entries || []).filter(entry => archiveEntryMatches(entry, needle));
+      return { dateStr, doc, entries };
+    }).filter(({ entries }) => entries.length);
+
+    if(!dates.length){
+      meta.textContent = "არქივი ცარიელია.";
+      groups.innerHTML = `<div class="archiveEmpty">არქივში ჯერ ჩანაწერი არ არის.</div>`;
+      return;
+    }
+
+    meta.textContent = needle
+      ? `სკოპი: ${archiveScopeKey()} • მოიძებნა ${matchedDocs.length} დღე`
+      : `სკოპი: ${archiveScopeKey()} • არქივში დღეები: ${dates.length}`;
+
+    if(needle && !matchedDocs.length){
+      groups.innerHTML = `<div class="archiveEmpty">ამ საძიებო სიტყვით ჩანაწერი ვერ მოიძებნა.</div>`;
+      return;
+    }
+
+    groups.innerHTML = matchedDocs.map(({ dateStr, doc, entries }) => {
+      const counts = entries.reduce((acc, entry) => {
         const entryCounts = countKinds(entry);
         acc.essential += entryCounts.essential;
         acc.optional += entryCounts.optional;
@@ -2757,14 +2803,14 @@ document.getElementById("expandAll").addEventListener("click", () => {
         return acc;
       }, { essential:0, optional:0, custom:0 });
       return `
-        <div class="archiveGroup" data-date="${dateStr}">
+        <div class="archiveGroup ${needle ? "open" : ""}" data-date="${dateStr}">
           <button class="archiveToggle" type="button">
             <span>${dateStr} • ER მორიგე ექიმი: ${escapeHTML(doc?.erDutyDoctor || "—")}</span>
-            <span class="tag">პაციენტები: ${(doc?.entries || []).length} • E/O/C: ${counts.essential}/${counts.optional}/${counts.custom}</span>
+            <span class="tag">პაციენტები: ${entries.length} • E/O/C: ${counts.essential}/${counts.optional}/${counts.custom}</span>
           </button>
           <div class="archivePanel">
             <p class="archiveMeta">ER მორიგე ექიმი: ${escapeHTML(doc?.erDutyDoctor || "—")} • არქივში გადასვლის დრო: ${escapeHTML(doc?.archivedAtLocal || "—")} • Firebase sync: ${doc?.firebaseSynced ? "კი" : "არა"}</p>
-            <div style="overflow:auto;">${buildArchiveTable(doc)}</div>
+            <div style="overflow:auto;">${buildArchiveTable(doc, entries)}</div>
           </div>
         </div>
       `;
@@ -3091,6 +3137,7 @@ document.getElementById("expandAll").addEventListener("click", () => {
   async function initDailyArchive(){
     const dayPick = document.getElementById("dayPick");
     const addBtn = document.getElementById("addToDaily");
+    const archiveSearch = document.getElementById("archiveSearch");
     const cancelBtn = document.getElementById("cancelEdit");
     const toggleDaily = document.getElementById("toggleDaily");
     const printDailyBtn = document.getElementById("printDaily");
@@ -3104,6 +3151,9 @@ document.getElementById("expandAll").addEventListener("click", () => {
     await activateDailyDate(dayPick.value);
     renderArchive();
     if(archiveCard && !IS_ARCHIVE_VIEW) archiveCard.style.display = "none";
+    archiveSearch?.addEventListener("input", () => {
+      renderArchive();
+    });
 
     dayPick.addEventListener("change", async () => {
       exitEditMode();
