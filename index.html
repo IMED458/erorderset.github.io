@@ -2824,14 +2824,13 @@ document.getElementById("expandAll").addEventListener("click", () => {
     if(!db) return { ok:false, reason:"no-db" };
     try{
       const ref = db.collection("ed_orderset_archive").doc(archiveDocId(doc.date));
-      const snap = await ref.get();
-      const merged = mergeArchiveDoc(snap.exists ? snap.data() : null, { ...doc, firebaseSynced:true });
+      const normalized = normalizeArchiveDoc({ ...doc, firebaseSynced:true });
       await ref.set({
-        ...merged,
+        ...normalized,
         firebaseSynced: true,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-      return { ok:true, doc: merged };
+      });
+      return { ok:true, doc: normalized };
     }catch(e){
       console.error("Archive Firestore sync failed", e);
       return { ok:false, reason:"write-failed" };
