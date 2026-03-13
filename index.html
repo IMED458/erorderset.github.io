@@ -2837,6 +2837,17 @@ document.getElementById("expandAll").addEventListener("click", () => {
       return { ok:false, reason:"write-failed" };
     }
   }
+  async function deleteArchiveDayFromFirestore(dateStr){
+    const db = getFirestoreDb();
+    if(!db) return { ok:false, reason:"no-db" };
+    try{
+      await db.collection("ed_orderset_archive").doc(archiveDocId(dateStr)).delete();
+      return { ok:true };
+    }catch(e){
+      console.error("Archive Firestore delete failed", e);
+      return { ok:false, reason:"delete-failed" };
+    }
+  }
   async function persistArchiveDay(doc){
     saveArchiveDay(doc.date, doc);
     const remote = await pushArchiveDayToFirestore(doc);
@@ -2859,6 +2870,16 @@ document.getElementById("expandAll").addEventListener("click", () => {
     }
 
     if(!window.confirm("ნამდვილად გინდა არქივიდან ამ ჩანაწერის წაშლა?")) return;
+
+    if(nextEntries.length === 0){
+      localStorage.removeItem(archiveDayKey(dateStr));
+      renderArchive();
+      const remoteDelete = await deleteArchiveDayFromFirestore(dateStr);
+      if(!remoteDelete.ok){
+        alert("დღე ლოკალურად წაიშალა, მაგრამ Firebase-დან წაშლა ვერ დასრულდა.");
+      }
+      return;
+    }
 
     const nextDoc = {
       ...archiveDoc,
