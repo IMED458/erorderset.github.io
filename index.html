@@ -1180,6 +1180,9 @@
     });
     if(toggleArchiveBtn) toggleArchiveBtn.textContent = "ჩექლისტზე დაბრუნება";
   }
+  function archiveEditKey(dateStr, entryId){
+    return storageKey(`archive_edit_${dateStr}_${entryId}`);
+  }
   const firebaseConfig = window.ED_FIREBASE_CONFIG || {
     apiKey: "AIzaSyDImJ5LcB6ljpqx0t7koLGvpPmWJTxfFzE",
     authDomain: "ercheck-991c0.firebaseapp.com",
@@ -2474,6 +2477,59 @@ document.getElementById("expandAll").addEventListener("click", () => {
     const dailyCard = document.getElementById("dailyCard");
     if(dailyCard) dailyCard.style.display = "block";
   }
+  function startArchiveEntryEdit(dateStr, id){
+    const archiveDoc = loadArchiveDay(dateStr);
+    const entry = archiveDoc?.entries?.find(x => x.id === id);
+    if(!entry){
+      alert("არქივის ჩანაწერი ვერ მოიძებნა.");
+      return;
+    }
+
+    try{
+      localStorage.setItem(archiveEditKey(dateStr, id), JSON.stringify({
+        date: dateStr,
+        entry
+      }));
+    }catch(e){}
+
+    window.location.href = buildViewUrl("");
+  }
+  function consumePendingArchiveEdit(){
+    try{
+      const prefix = storageKey("archive_edit_");
+      let targetKey = "";
+      for(let i = 0; i < localStorage.length; i++){
+        const k = localStorage.key(i);
+        if(k && k.startsWith(prefix)){
+          targetKey = k;
+          break;
+        }
+      }
+      if(!targetKey) return false;
+
+      const raw = localStorage.getItem(targetKey);
+      localStorage.removeItem(targetKey);
+      if(!raw) return false;
+
+      const payload = JSON.parse(raw);
+      if(!payload?.entry || !payload?.date) return false;
+
+      const dayPick = document.getElementById("dayPick");
+      if(dayPick) dayPick.value = payload.date;
+
+      const dayEntries = loadDay(payload.date);
+      if(!dayEntries.some(entry => entry.id === payload.entry.id)){
+        dayEntries.push(payload.entry);
+        saveDay(payload.date, dayEntries);
+      }
+
+      renderDaily(payload.date);
+      startEditMode(payload.date, payload.entry.id);
+      return true;
+    }catch(e){
+      return false;
+    }
+  }
   function renderDaily(dateStr){
     const card = document.getElementById("dailyCard");
     const meta = document.getElementById("dailyMeta");
@@ -2552,6 +2608,10 @@ document.getElementById("expandAll").addEventListener("click", () => {
           <td style="border:1px solid rgba(0,0,0,.08); padding:6px 8px;">${escapeHTML(ordered.times)}</td>
           <td style="border:1px solid rgba(0,0,0,.08); padding:6px 8px;">${escapeHTML(renderEntryTestsText(entry) || "—")}</td>
           <td style="border:1px solid rgba(0,0,0,.08); padding:6px 8px;">${counts.essential}/${counts.optional}/${counts.custom}</td>
+          <td style="border:1px solid rgba(0,0,0,.08); padding:6px 8px; white-space:nowrap;">
+            <button class="btn" data-archive-edit="${entry.id}" data-archive-date="${escapeHTML(doc?.date || "")}" type="button">რედაქტირება</button>
+            <button class="btn" data-archive-del="${entry.id}" data-archive-date="${escapeHTML(doc?.date || "")}" type="button">წაშლა</button>
+          </td>
         </tr>
       `;
     }).join("");
@@ -2569,6 +2629,7 @@ document.getElementById("expandAll").addEventListener("click", () => {
             <th style="text-align:left; border:1px solid rgba(0,0,0,.12); padding:6px 8px;">შეკვეთის დრო</th>
             <th style="text-align:left; border:1px solid rgba(0,0,0,.12); padding:6px 8px;">არჩეული კვლევები</th>
             <th style="text-align:left; border:1px solid rgba(0,0,0,.12); padding:6px 8px;">რაოდ. (E/O/C)</th>
+            <th style="text-align:left; border:1px solid rgba(0,0,0,.12); padding:6px 8px;">ქმედება</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -2611,6 +2672,22 @@ document.getElementById("expandAll").addEventListener("click", () => {
     groups.querySelectorAll(".archiveToggle").forEach(btn => {
       btn.addEventListener("click", () => {
         btn.closest(".archiveGroup")?.classList.toggle("open");
+      });
+    });
+    groups.querySelectorAll("button[data-archive-edit]").forEach(btn => {
+      btn.addEventListener("click", ev => {
+        ev.stopPropagation();
+        const id = btn.getAttribute("data-archive-edit");
+        const dateStr = btn.getAttribute("data-archive-date");
+        if(id && dateStr) startArchiveEntryEdit(dateStr, id);
+      });
+    });
+    groups.querySelectorAll("button[data-archive-del]").forEach(btn => {
+      btn.addEventListener("click", async ev => {
+        ev.stopPropagation();
+        const id = btn.getAttribute("data-archive-del");
+        const dateStr = btn.getAttribute("data-archive-date");
+        if(id && dateStr) await removeArchiveEntry(dateStr, id);
       });
     });
   }
@@ -2759,6 +2836,44 @@ document.getElementById("expandAll").addEventListener("click", () => {
       console.error("Archive Firestore sync failed", e);
       return { ok:false, reason:"write-failed" };
     }
+  }
+  async function persistArchiveDay(doc){
+    saveArchiveDay(doc.date, doc);
+    const remote = await pushArchiveDayToFirestore(doc);
+    if(remote.ok && remote.doc){
+      saveArchiveDay(doc.date, { ...remote.doc, firebaseSynced:true, updatedAtLocal: fmtNow() });
+      return { ok:true, doc: loadArchiveDay(doc.date) };
+    }
+    return { ok:false, doc };
+  }
+  async function removeArchiveEntry(dateStr, id){
+    const archiveDoc = loadArchiveDay(dateStr);
+    if(!archiveDoc){
+      alert("არქივის დღე ვერ მოიძებნა.");
+      return;
+    }
+    const nextEntries = (archiveDoc.entries || []).filter(entry => entry.id !== id);
+    if(nextEntries.length === (archiveDoc.entries || []).length){
+      alert("ჩანაწერი ვერ მოიძებნა.");
+      return;
+    }
+
+    if(!window.confirm("ნამდვილად გინდა არქივიდან ამ ჩანაწერის წაშლა?")) return;
+
+    const nextDoc = {
+      ...archiveDoc,
+      entries: nextEntries,
+      updatedAtLocal: fmtNow(),
+      firebaseSynced: false
+    };
+    const result = await persistArchiveDay(nextDoc);
+    if(result.ok){
+      renderArchive();
+      return;
+    }
+
+    renderArchive();
+    alert("ჩანაწერი ლოკალურად წაიშალა, მაგრამ Firebase სინქი ვერ დასრულდა.");
   }
   async function hydrateArchiveFromFirestore(){
     const db = getFirestoreDb();
@@ -2992,6 +3107,7 @@ document.getElementById("expandAll").addEventListener("click", () => {
     await hydrateArchiveFromFirestore();
     renderArchive();
     applyViewMode();
+    if(!IS_ARCHIVE_VIEW) consumePendingArchiveEdit();
     refreshAllOptionalTables();
     scheduleFirestoreSync();
   }
