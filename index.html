@@ -357,7 +357,7 @@
 </div>
 </header>
 <div class="grid">
-<section class="card" style="grid-column:1 / -1;">
+<section class="card" id="mainChecklistCard" style="grid-column:1 / -1;">
 <h2>ნიშნების / სიმპტომების / სინდრომების მიხედვით</h2>
 <div class="content">
 <div class="list" id="list"></div>
@@ -1093,6 +1093,8 @@
 
   const list = document.getElementById("list");
   const urlParams = new URLSearchParams(window.location.search);
+  const VIEW_MODE = (urlParams.get("view") || "").trim().toLowerCase();
+  const IS_ARCHIVE_VIEW = VIEW_MODE === "archive";
   const PATIENT_ID = (urlParams.get("pid") || "").trim();
   const ROOM_KEY = (urlParams.get("room") || "").trim();
   const PATIENT_SCOPE = PATIENT_ID || "default";
@@ -1124,6 +1126,59 @@
     try{
       localStorage.setItem(OPEN_PANELS_KEY, JSON.stringify([...set]));
     }catch(e){}
+  }
+  function buildViewUrl(viewName){
+    const params = new URLSearchParams(window.location.search);
+    if(viewName) params.set("view", viewName);
+    else params.delete("view");
+    const query = params.toString();
+    return `${window.location.pathname}${query ? "?" + query : ""}`;
+  }
+  function openArchiveTab(){
+    const archiveUrl = buildViewUrl("archive");
+    const opened = window.open(archiveUrl, "_blank", "noopener");
+    if(!opened){
+      window.location.href = archiveUrl;
+    }
+  }
+  function applyViewMode(){
+    const mainChecklistCard = document.getElementById("mainChecklistCard");
+    const dailyCard = document.getElementById("dailyCard");
+    const archiveCard = document.getElementById("archiveCard");
+    const searchWrap = document.querySelector(".search");
+    const patientWrap = document.querySelector(".patient");
+    const toggleArchiveBtn = document.getElementById("toggleArchive");
+    const printSelectedBtn = document.querySelector('button[onclick="printSelected()"]');
+    const titleEl = document.querySelector("header h1");
+    const subEl = document.querySelector("header .sub");
+    const hideIds = [
+      "expandAll",
+      "collapseAll",
+      "resetChecks",
+      "dayPick",
+      "addToDaily",
+      "cancelEdit",
+      "toggleDaily",
+      "printDaily",
+      "archiveDaily",
+      "clearDaily"
+    ];
+
+    if(!IS_ARCHIVE_VIEW) return;
+
+    if(titleEl) titleEl.textContent = "ER ორდერ-სეტი — არქივი";
+    if(subEl) subEl.textContent = "არქივი დაჯგუფებულია თარიღების მიხედვით. დააჭირე თარიღს დღის ცხრილის გასახსნელად.";
+    if(mainChecklistCard) mainChecklistCard.style.display = "none";
+    if(dailyCard) dailyCard.style.display = "none";
+    if(archiveCard) archiveCard.style.display = "block";
+    if(searchWrap) searchWrap.style.display = "none";
+    if(patientWrap) patientWrap.style.display = "none";
+    if(printSelectedBtn) printSelectedBtn.style.display = "none";
+    hideIds.forEach(id => {
+      const el = document.getElementById(id);
+      if(el) el.style.display = "none";
+    });
+    if(toggleArchiveBtn) toggleArchiveBtn.textContent = "ჩექლისტზე დაბრუნება";
   }
   const firebaseConfig = window.ED_FIREBASE_CONFIG || {
     apiKey: "AIzaSyDImJ5LcB6ljpqx0t7koLGvpPmWJTxfFzE",
@@ -2844,9 +2899,11 @@ document.getElementById("expandAll").addEventListener("click", () => {
     });
     archiveBtn?.addEventListener("click", archiveSelectedDay);
     toggleArchive?.addEventListener("click", () => {
-      if(!archiveCard) return;
-      archiveCard.style.display = archiveCard.style.display === "none" ? "block" : "none";
-      renderArchive();
+      if(IS_ARCHIVE_VIEW){
+        window.location.href = buildViewUrl("");
+        return;
+      }
+      openArchiveTab();
     });
   }
 
@@ -2934,6 +2991,7 @@ document.getElementById("expandAll").addEventListener("click", () => {
     initDailyArchive();
     await hydrateArchiveFromFirestore();
     renderArchive();
+    applyViewMode();
     refreshAllOptionalTables();
     scheduleFirestoreSync();
   }
