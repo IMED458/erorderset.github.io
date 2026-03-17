@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 
 <html lang="ka">
@@ -38,6 +37,7 @@
     #ptDischargeBtn{ background:#86efac; }
     #addToDaily{ background:#fde68a; }
     #archiveDaily{ background:#93c5fd; }
+    #restoreDailyByDate{ background:#c4b5fd; }
     #toggleArchive{ background:#bfdbfe; }
     #resetChecks, #clearDaily{ background:#f87171; }
     #dailyTbody button[data-del]{ background:#f87171; }
@@ -366,6 +366,7 @@
 <button class="btn" id="toggleDaily" type="button">დღის ცხრილი</button>
 <button class="btn" id="printDaily" type="button">დღის ცხრილის ბეჭდვა</button>
 <button class="btn" id="archiveDaily" type="button">არქივში გადატანა</button>
+<button class="btn" id="restoreDailyByDate" type="button">თარიღიდან აღდგენა</button>
 <button class="btn" id="toggleArchive" type="button">არქივი</button>
 <button class="btn" id="clearDaily" title="მხოლოდ არჩეული დღის ჩანაწერების წაშლა" type="button">დღის გასუფთავება</button>
 </div>
@@ -1309,18 +1310,26 @@
     const ref = getDailyDocRef(dateStr);
     if(!ref) return { ok:false, reason:"no-db" };
     try{
-      const entries = loadDay(dateStr).map(sanitizeEntryForDaily);
-      if(!entries.length){
+      const localEntries = loadDay(dateStr).map(sanitizeEntryForDaily);
+      const snap = await ref.get();
+      const remoteEntries = snap.exists
+        ? normalizeDailyDoc({ ...snap.data(), firebaseSynced:true }).entries
+        : [];
+      const mergedEntries = mergeDailyEntries(remoteEntries, localEntries);
+
+      if(!mergedEntries.length){
         await ref.delete();
         return { ok:true, deleted:true };
       }
+
       await ref.set({
         date: dateStr,
         scopeKey: archiveScopeKey(),
         updatedAtLocal: fmtNow(),
-        entries,
+        entries: mergedEntries,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       });
+      saveDay(dateStr, mergedEntries, { sync:false });
       return { ok:true, deleted:false };
     }catch(e){
       console.error("Daily Firestore sync failed", e);
@@ -1342,12 +1351,14 @@
     if(!ref) return false;
     try{
       const snap = await ref.get();
+      const localEntries = loadDay(dateStr).map(sanitizeEntryForDaily);
       if(!snap.exists){
-        saveDay(dateStr, [], { sync:false });
+        saveDay(dateStr, localEntries, { sync:false });
         return true;
       }
       const data = normalizeDailyDoc({ ...snap.data(), firebaseSynced:true });
-      saveDay(dateStr, data.entries, { sync:false });
+      const mergedEntries = mergeDailyEntries(data.entries, localEntries);
+      saveDay(dateStr, mergedEntries, { sync:false });
       return true;
     }catch(e){
       console.error("Daily Firestore load failed", e);
@@ -1359,11 +1370,13 @@
     const ref = getDailyDocRef(dateStr);
     if(!ref) return;
     dailyWatchUnsub = ref.onSnapshot(snap => {
+      const localEntries = loadDay(dateStr).map(sanitizeEntryForDaily);
       if(!snap.exists){
-        saveDay(dateStr, [], { sync:false });
+        saveDay(dateStr, localEntries, { sync:false });
       }else{
         const data = normalizeDailyDoc({ ...snap.data(), firebaseSynced:true });
-        saveDay(dateStr, data.entries, { sync:false });
+        const mergedEntries = mergeDailyEntries(data.entries, localEntries);
+        saveDay(dateStr, mergedEntries, { sync:false });
       }
       if(getCurrentDay() === dateStr) renderDaily(dateStr);
     }, e => {
@@ -2340,6 +2353,18 @@ document.getElementById("expandAll").addEventListener("click", () => {
     const x = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
     return x.toISOString().slice(0, 10);
   }
+  function normalizeDateInput(raw){
+    const s = String(raw || "").trim();
+    if(!s) return "";
+    if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const mdY = s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})$/);
+    if(mdY){
+      const mm = mdY[1].padStart(2, "0");
+      const dd = mdY[2].padStart(2, "0");
+      return `${mdY[3]}-${mm}-${dd}`;
+    }
+    return "";
+  }
   function dayKey(dateStr){ return `${sharedStorageKey("daily_log")}:${dateStr}`; }
   function archiveDayKey(dateStr){ return `${sharedStorageKey("archive_day")}:${dateStr}`; }
   function archiveScopeKey(){
@@ -2961,6 +2986,9 @@ document.getElementById("expandAll").addEventListener("click", () => {
       entries: Array.isArray(doc?.entries) ? doc.entries.map(sanitizeEntryForDaily) : []
     };
   }
+  function mergeDailyEntries(existingEntries, incomingEntries){
+    return mergeArchiveEntries(existingEntries || [], incomingEntries || []);
+  }
   function mergeArchiveEntries(existingEntries, incomingEntries){
     const bySignature = new Map();
     [...(existingEntries || []), ...(incomingEntries || [])].forEach(entry => {
@@ -3094,24 +3122,22 @@ document.getElementById("expandAll").addEventListener("click", () => {
       console.error("Archive Firestore load failed", e);
     }
   }
-  async function archiveSelectedDay(){
-    const dateStr = getCurrentDay();
+  async function archiveDayByDate(dateStr, options){
+    const opts = options || {};
+    await hydrateDayFromFirestore(dateStr);
     const entries = loadDay(dateStr);
     if(!entries.length){
-      alert("ამ დღეზე ჩანაწერი არ არის.");
-      return;
+      return { ok:false, reason:"empty" };
     }
-
-    const archiveBtn = document.getElementById("archiveDaily");
-    if(archiveBtn) archiveBtn.disabled = true;
 
     const previousDoctor = loadArchiveDay(dateStr)?.erDutyDoctor || "";
-    const promptValue = window.prompt("შეიყვანე ER მორიგე ექიმი", previousDoctor);
-    if(promptValue === null){
-      if(archiveBtn) archiveBtn.disabled = false;
-      return;
+    let dutyDoctor = previousDoctor;
+    if(opts.askDoctor !== false && !previousDoctor){
+      const promptValue = window.prompt("შეიყვანე ER მორიგე ექიმი", previousDoctor);
+      if(promptValue === null) return { ok:false, reason:"cancelled" };
+      dutyDoctor = promptValue.trim();
     }
-    const dutyDoctor = promptValue.trim();
+
     const localPayload = mergeArchiveDoc(loadArchiveDay(dateStr), {
       date: dateStr,
       scopeKey: archiveScopeKey(),
@@ -3131,13 +3157,61 @@ document.getElementById("expandAll").addEventListener("click", () => {
       saveArchiveDay(dateStr, { ...remote.doc, firebaseSynced:true, updatedAtLocal: fmtNow() });
     }
 
-    saveDay(dateStr, []);
-    if(dailyEdit.date === dateStr) exitEditMode();
-    renderDaily(dateStr);
     renderArchive();
-
+    return { ok:true, remoteOk:remote.ok };
+  }
+  async function archiveSelectedDay(){
+    const dateStr = getCurrentDay();
+    const archiveBtn = document.getElementById("archiveDaily");
+    if(archiveBtn) archiveBtn.disabled = true;
+    const result = await archiveDayByDate(dateStr, { askDoctor:true });
     if(archiveBtn) archiveBtn.disabled = false;
-    alert(remote.ok ? "დღის ცხრილი არქივში გადავიდა." : "დღის ცხრილი ლოკალურ არქივში გადავიდა. Firebase სინქი მოგვიანებით შეგვიძლია გავამაგროთ.");
+
+    if(result.reason === "empty"){
+      alert("ამ დღეზე ჩანაწერი არ არის.");
+      return;
+    }
+    if(result.reason === "cancelled") return;
+
+    alert(result.remoteOk ? "დღის ცხრილი არქივში დაემატა (დღიური არ წაიშალა)." : "დღის ცხრილი ლოკალურ არქივში დაემატა (დღიური არ წაიშალა). Firebase სინქი მოგვიანებით შეგვიძლია გავამაგროთ.");
+  }
+  async function restoreDayByPrompt(){
+    const raw = window.prompt("შეიყვანე თარიღი (მაგ: 03.14.2026 ან 2026-03-14)");
+    if(raw === null) return;
+    const normalized = normalizeDateInput(raw);
+    if(!normalized){
+      alert("თარიღის ფორმატი არასწორია. გამოიყენე 2026-03-14 ან 03.14.2026.");
+      return;
+    }
+
+    const aliases = uniqPreserve([normalized, String(raw).trim()]);
+    const existingLocal = aliases.find(d => loadDay(d).length);
+    if(existingLocal && existingLocal !== normalized){
+      saveDay(normalized, loadDay(existingLocal));
+    }
+
+    const db = getFirestoreDb();
+    if(db){
+      for(const alias of aliases){
+        try{
+          const snap = await db.collection("ed_orderset_daily").doc(dailyDocId(alias)).get();
+          if(!snap.exists) continue;
+          const data = normalizeDailyDoc({ ...snap.data(), firebaseSynced:true });
+          if((data.entries || []).length){
+            saveDay(normalized, data.entries, { sync:false });
+            break;
+          }
+        }catch(e){
+          console.error("Restore by date failed", e);
+        }
+      }
+    }
+
+    const dayPick = document.getElementById("dayPick");
+    if(dayPick) dayPick.value = normalized;
+    await activateDailyDate(normalized);
+    renderDaily(normalized);
+    alert(`თარიღი ${normalized} აღდგა/გაიხსნა. ახლა შეგიძლიათ "არქივში გადატანა".`);
   }
   async function activateDailyDate(dateStr){
     if(!dateStr) return;
@@ -3154,6 +3228,7 @@ document.getElementById("expandAll").addEventListener("click", () => {
     const printDailyBtn = document.getElementById("printDaily");
     const clearDailyBtn = document.getElementById("clearDaily");
     const archiveBtn = document.getElementById("archiveDaily");
+    const restoreBtn = document.getElementById("restoreDailyByDate");
     const toggleArchive = document.getElementById("toggleArchive");
     const archiveCard = document.getElementById("archiveCard");
     if(!(dayPick && addBtn)) return;
@@ -3217,8 +3292,13 @@ document.getElementById("expandAll").addEventListener("click", () => {
       if(!card) return;
       card.style.display = card.style.display === "none" ? "block" : "none";
     });
-    printDailyBtn?.addEventListener("click", () => {
-      printDailySummary(getCurrentDay());
+    printDailyBtn?.addEventListener("click", async () => {
+      const dateStr = getCurrentDay();
+      printDailySummary(dateStr);
+      const result = await archiveDayByDate(dateStr, { askDoctor:true });
+      if(result.ok){
+        alert(result.remoteOk ? "ბეჭდვის შემდეგ დღის ცხრილი ავტომატურად დაემატა არქივში." : "ბეჭდვის შემდეგ დღის ცხრილი ლოკალურ არქივში დაემატა (Firebase სინქი ვერ დასრულდა).");
+      }
     });
     clearDailyBtn?.addEventListener("click", () => {
       const dateStr = getCurrentDay();
@@ -3228,6 +3308,7 @@ document.getElementById("expandAll").addEventListener("click", () => {
       renderDaily(dateStr);
     });
     archiveBtn?.addEventListener("click", archiveSelectedDay);
+    restoreBtn?.addEventListener("click", restoreDayByPrompt);
     toggleArchive?.addEventListener("click", () => {
       if(IS_ARCHIVE_VIEW){
         window.location.href = buildViewUrl("");
