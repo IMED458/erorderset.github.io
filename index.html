@@ -1117,6 +1117,38 @@
   const ROOM_KEY = (urlParams.get("room") || "").trim();
   const PATIENT_SCOPE = PATIENT_ID || "default";
   const SHARED_DATA_SCOPE = ROOM_KEY || "global";
+  const browserLocalStorage = window.localStorage;
+  const runtimeStorageData = new Map();
+  const SESSION_ID = (function(){
+    const fromQuery = (urlParams.get("session") || "").trim();
+    if(fromQuery) return fromQuery;
+    const currentName = String(window.name || "");
+    if(currentName.startsWith("erorderset:")) return currentName.slice("erorderset:".length);
+    const generated = (window.crypto?.randomUUID ? window.crypto.randomUUID() : `sess_${Date.now()}_${Math.random().toString(16).slice(2)}`);
+    window.name = `erorderset:${generated}`;
+    return generated;
+  })();
+  const localStorage = {
+    get length(){
+      return runtimeStorageData.size;
+    },
+    key(index){
+      return [...runtimeStorageData.keys()][index] || null;
+    },
+    getItem(key){
+      const normalized = String(key);
+      return runtimeStorageData.has(normalized) ? runtimeStorageData.get(normalized) : null;
+    },
+    setItem(key, value){
+      runtimeStorageData.set(String(key), String(value));
+    },
+    removeItem(key){
+      runtimeStorageData.delete(String(key));
+    },
+    clear(){
+      runtimeStorageData.clear();
+    }
+  };
   const OPEN_PANELS_KEY = storageKey("pt_open_panels");
   function storageKey(suffix){
     return `ed_orderset_${PATIENT_SCOPE}_${suffix}`;
@@ -1206,9 +1238,6 @@
     });
     if(toggleArchiveBtn) toggleArchiveBtn.textContent = "ჩექლისტზე დაბრუნება";
   }
-  function archiveEditKey(dateStr, entryId){
-    return sharedStorageKey(`archive_edit_${dateStr}_${entryId}`);
-  }
   const firebaseConfig = window.ED_FIREBASE_CONFIG || {
     apiKey: "AIzaSyDImJ5LcB6ljpqx0t7koLGvpPmWJTxfFzE",
     authDomain: "ercheck-991c0.firebaseapp.com",
@@ -1220,6 +1249,7 @@
   };
   let firestoreDb = null;
   let checklistDocRef = null;
+  let draftStateDocRef = null;
   let syncTimer = null;
   let dailyWatchUnsub = null;
   const dailySyncTimers = new Map();
@@ -1236,15 +1266,23 @@
     }
   }
   function initChecklistFirestore(){
-    if(!PATIENT_ID || !ROOM_KEY) return;
     const db = getFirestoreDb();
     if(!db) return;
-    checklistDocRef = db.collection("patient_checklists").doc(`${ROOM_KEY}_${PATIENT_ID}`);
+    if(PATIENT_ID && ROOM_KEY){
+      checklistDocRef = db.collection("patient_checklists").doc(`${ROOM_KEY}_${PATIENT_ID}`);
+      draftStateDocRef = null;
+      return;
+    }
+    draftStateDocRef = db.collection("ed_orderset_archive").doc(`draft__${archiveScopeKey()}__${SESSION_ID}`);
+  }
+  function getScopedStateDocRef(){
+    return checklistDocRef || draftStateDocRef;
   }
   async function hydrateScopedStateFromFirestore(){
-    if(!checklistDocRef) return;
+    const ref = getScopedStateDocRef();
+    if(!ref) return;
     try{
-      const snap = await checklistDocRef.get();
+      const snap = await ref.get();
       if(!snap.exists) return;
       const data = snap.data() || {};
       const state = data.state || {};
@@ -1270,26 +1308,44 @@
     return out;
   }
   async function saveScopedStateToFirestore(){
-    if(!checklistDocRef) return;
+    const ref = getScopedStateDocRef();
+    if(!ref) return;
     try{
       const state = collectScopedState();
       const hasSelections = Object.entries(state).some(([k, v]) => {
         return k.startsWith(storageKey("chk_")) && v === "1";
       });
-      await checklistDocRef.set({
-        patientId: PATIENT_ID,
-        room: ROOM_KEY,
-        patientName: (document.getElementById("ptName")?.value || "").trim(),
-        hasSelections,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        state
-      }, { merge: true });
+      if(checklistDocRef){
+        await checklistDocRef.set({
+          patientId: PATIENT_ID,
+          room: ROOM_KEY,
+          patientName: (document.getElementById("ptName")?.value || "").trim(),
+          hasSelections,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          state
+        }, { merge: true });
+      }else{
+        await draftStateDocRef.set({
+          date: "draft",
+          scopeKey: `draft::${archiveScopeKey()}`,
+          entries: [],
+          sessionId: SESSION_ID,
+          patientScope: PATIENT_SCOPE,
+          patientId: PATIENT_ID,
+          room: ROOM_KEY,
+          patientName: (document.getElementById("ptName")?.value || "").trim(),
+          hasSelections,
+          updatedAtLocal: fmtNow(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          state
+        }, { merge: true });
+      }
     }catch(e){
       console.error("Firestore save failed", e);
     }
   }
   function scheduleFirestoreSync(){
-    if(!checklistDocRef) return;
+    if(!getScopedStateDocRef()) return;
     if(syncTimer) clearTimeout(syncTimer);
     syncTimer = setTimeout(() => {
       saveScopedStateToFirestore();
@@ -1474,7 +1530,7 @@
     let incomingAdmit = (urlParams.get("admit") || "").trim();
     if(PATIENT_ID){
       try{
-        const raw = localStorage.getItem(`inpatient_checklist_patient_${PATIENT_ID}`);
+        const raw = browserLocalStorage.getItem(`inpatient_checklist_patient_${PATIENT_ID}`);
         if(raw){
           const payload = JSON.parse(raw);
           if(!incomingName) incomingName = String(payload?.patient_name || "").trim();
@@ -2681,53 +2737,41 @@ document.getElementById("expandAll").addEventListener("click", () => {
     if(dailyCard) dailyCard.style.display = "block";
   }
   function startArchiveEntryEdit(dateStr, id){
-    const archiveDoc = loadArchiveDay(dateStr);
-    const entry = archiveDoc?.entries?.find(x => x.id === id);
-    if(!entry){
-      alert("არქივის ჩანაწერი ვერ მოიძებნა.");
-      return;
-    }
-
-    try{
-      localStorage.setItem(archiveEditKey(dateStr, id), JSON.stringify({
-        date: dateStr,
-        entry
-      }));
-    }catch(e){}
-
-    window.location.href = buildViewUrl("");
+    const params = new URLSearchParams(window.location.search);
+    params.delete("view");
+    params.set("editDate", dateStr);
+    params.set("editEntry", id);
+    const query = params.toString();
+    window.location.href = `${window.location.pathname}${query ? "?" + query : ""}`;
   }
-  function consumePendingArchiveEdit(){
+  async function consumePendingArchiveEdit(){
     try{
-      const prefix = sharedStorageKey("archive_edit_");
-      let targetKey = "";
-      for(let i = 0; i < localStorage.length; i++){
-        const k = localStorage.key(i);
-        if(k && k.startsWith(prefix)){
-          targetKey = k;
-          break;
-        }
-      }
-      if(!targetKey) return false;
+      const editDate = (urlParams.get("editDate") || "").trim();
+      const editEntry = (urlParams.get("editEntry") || "").trim();
+      if(!(editDate && editEntry)) return false;
 
-      const raw = localStorage.getItem(targetKey);
-      localStorage.removeItem(targetKey);
-      if(!raw) return false;
-
-      const payload = JSON.parse(raw);
-      if(!payload?.entry || !payload?.date) return false;
+      await hydrateArchiveDayFromFirestore(editDate);
+      const archiveDoc = loadArchiveDay(editDate);
+      const entry = archiveDoc?.entries?.find(x => x.id === editEntry);
+      if(!entry) return false;
 
       const dayPick = document.getElementById("dayPick");
-      if(dayPick) dayPick.value = payload.date;
+      if(dayPick) dayPick.value = editDate;
 
-      const dayEntries = loadDay(payload.date);
-      if(!dayEntries.some(entry => entry.id === payload.entry.id)){
-        dayEntries.push(payload.entry);
-        saveDay(payload.date, dayEntries);
+      const dayEntries = loadDay(editDate);
+      if(!dayEntries.some(row => row.id === entry.id)){
+        dayEntries.push(sanitizeEntryForDaily(entry));
+        saveDay(editDate, dayEntries);
       }
 
-      renderDaily(payload.date);
-      startEditMode(payload.date, payload.entry.id);
+      const nextParams = new URLSearchParams(window.location.search);
+      nextParams.delete("editDate");
+      nextParams.delete("editEntry");
+      const nextQuery = nextParams.toString();
+      window.history.replaceState({}, "", `${window.location.pathname}${nextQuery ? "?" + nextQuery : ""}`);
+
+      renderDaily(editDate);
+      startEditMode(editDate, entry.id);
       return true;
     }catch(e){
       return false;
@@ -3494,7 +3538,7 @@ document.getElementById("expandAll").addEventListener("click", () => {
     await syncAllLocalDaysToFirestore();
     renderArchive();
     applyViewMode();
-    if(!IS_ARCHIVE_VIEW) consumePendingArchiveEdit();
+    if(!IS_ARCHIVE_VIEW) await consumePendingArchiveEdit();
     refreshAllOptionalTables();
     scheduleFirestoreSync();
   }
