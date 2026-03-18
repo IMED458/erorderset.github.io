@@ -1295,10 +1295,18 @@
       saveScopedStateToFirestore();
     }, 700);
   }
+  function legacyDailyDocId(dateStr){
+    return `${archiveScopeKey()}__${dateStr}`.replace(/\//g, "_");
+  }
   function getDailyDocRef(dateStr){
     const db = getFirestoreDb();
     if(!(db && dateStr)) return null;
-    return db.collection("ed_orderset_daily").doc(dailyDocId(dateStr));
+    return db.collection("ed_orderset_archive").doc(dailyDocId(dateStr));
+  }
+  function getLegacyDailyDocRef(dateStr){
+    const db = getFirestoreDb();
+    if(!(db && dateStr)) return null;
+    return db.collection("ed_orderset_daily").doc(legacyDailyDocId(dateStr));
   }
   function clearDailyWatch(){
     if(typeof dailyWatchUnsub === "function"){
@@ -1324,7 +1332,7 @@
 
       await ref.set({
         date: dateStr,
-        scopeKey: archiveScopeKey(),
+        scopeKey: dailyScopeKey(),
         updatedAtLocal: fmtNow(),
         entries: mergedEntries,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -1347,17 +1355,23 @@
     dailySyncTimers.set(dateStr, timer);
   }
   async function hydrateDayFromFirestore(dateStr){
-    const ref = getDailyDocRef(dateStr);
-    if(!ref) return false;
+    const refs = [];
+    const primaryRef = getDailyDocRef(dateStr);
+    const legacyRef = getLegacyDailyDocRef(dateStr);
+    if(primaryRef) refs.push(primaryRef);
+    if(legacyRef) refs.push(legacyRef);
+    if(!refs.length) return false;
     try{
-      const snap = await ref.get();
       const localEntries = loadDay(dateStr).map(sanitizeEntryForDaily);
-      if(!snap.exists){
-        saveDay(dateStr, localEntries, { sync:false });
-        return true;
+      let mergedEntries = localEntries;
+
+      for(const ref of refs){
+        const snap = await ref.get();
+        if(!snap.exists) continue;
+        const data = normalizeDailyDoc({ ...snap.data(), firebaseSynced:true });
+        mergedEntries = mergeDailyEntries(mergedEntries, data.entries);
       }
-      const data = normalizeDailyDoc({ ...snap.data(), firebaseSynced:true });
-      const mergedEntries = mergeDailyEntries(data.entries, localEntries);
+
       saveDay(dateStr, mergedEntries, { sync:false });
       return true;
     }catch(e){
@@ -1382,6 +1396,13 @@
     }, e => {
       console.error("Daily Firestore watch failed", e);
     });
+  }
+  async function syncAllLocalDaysToFirestore(){
+    const dates = listLocalDayDates();
+    for(const dateStr of dates){
+      if(!loadDay(dateStr).length) continue;
+      await syncDailyDayToFirestore(dateStr);
+    }
   }
 
   // Tracks the last user-opened presentation panel (used for printing the active panel)
@@ -2365,16 +2386,29 @@ document.getElementById("expandAll").addEventListener("click", () => {
     }
     return "";
   }
+  function listLocalDayDates(){
+    const prefix = `${sharedStorageKey("daily_log")}:`;
+    const out = [];
+    for(let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if(!k || !k.startsWith(prefix)) continue;
+      out.push(k.slice(prefix.length));
+    }
+    return out.sort((a, b) => b.localeCompare(a));
+  }
   function dayKey(dateStr){ return `${sharedStorageKey("daily_log")}:${dateStr}`; }
   function archiveDayKey(dateStr){ return `${sharedStorageKey("archive_day")}:${dateStr}`; }
   function archiveScopeKey(){
     return SHARED_DATA_SCOPE;
   }
+  function dailyScopeKey(){
+    return `daily::${archiveScopeKey()}`;
+  }
   function archiveDocId(dateStr){
     return `${archiveScopeKey()}__${dateStr}`.replace(/\//g, "_");
   }
   function dailyDocId(dateStr){
-    return `${archiveScopeKey()}__${dateStr}`.replace(/\//g, "_");
+    return `daily__${archiveScopeKey()}__${dateStr}`.replace(/\//g, "_");
   }
   function loadDay(dateStr){
     try{ return JSON.parse(localStorage.getItem(dayKey(dateStr)) || "[]"); }
@@ -2402,6 +2436,14 @@ document.getElementById("expandAll").addEventListener("click", () => {
       out.push(k.slice(prefix.length));
     }
     return out.sort((a, b) => b.localeCompare(a));
+  }
+  function archiveDocSignature(doc){
+    const entries = (doc?.entries || []).map(entrySignature).sort().join("||");
+    return [
+      doc?.date || "",
+      doc?.erDutyDoctor || "",
+      entries
+    ].join("::");
   }
   function getCurrentDay(){
     return document.getElementById("dayPick")?.value || toLocalISODate();
@@ -3032,6 +3074,42 @@ document.getElementById("expandAll").addEventListener("click", () => {
       entries: mergedEntries
     };
   }
+  async function fetchArchiveDayFromFirestore(dateStr){
+    const db = getFirestoreDb();
+    if(!db) return null;
+    try{
+      const snap = await db.collection("ed_orderset_archive").doc(archiveDocId(dateStr)).get();
+      if(!snap.exists) return null;
+      return normalizeArchiveDoc({ ...snap.data(), firebaseSynced:true });
+    }catch(e){
+      console.error("Archive Firestore single-load failed", e);
+      return null;
+    }
+  }
+  async function hydrateArchiveDayFromFirestore(dateStr){
+    const remote = await fetchArchiveDayFromFirestore(dateStr);
+    if(!remote) return null;
+    const merged = mergeArchiveDoc(loadArchiveDay(dateStr), remote);
+    saveArchiveDay(dateStr, merged);
+    return merged;
+  }
+  async function pushArchiveBackupToFirestore(doc, label){
+    const db = getFirestoreDb();
+    if(!(db && doc?.date && (doc.entries || []).length)) return;
+    try{
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      await db.collection("ed_orderset_archive").doc(`archive_backup__${archiveScopeKey()}__${doc.date}__${stamp}`).set({
+        ...normalizeArchiveDoc(doc),
+        scopeKey: `archive-backup::${archiveScopeKey()}`,
+        backupOf: archiveDocId(doc.date),
+        backupLabel: label || "snapshot",
+        backedUpAtLocal: fmtNow(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }catch(e){
+      console.error("Archive Firestore backup failed", e);
+    }
+  }
   async function pushArchiveDayToFirestore(doc){
     const db = getFirestoreDb();
     if(!db) return { ok:false, reason:"no-db" };
@@ -3061,15 +3139,29 @@ document.getElementById("expandAll").addEventListener("click", () => {
     }
   }
   async function persistArchiveDay(doc){
-    saveArchiveDay(doc.date, doc);
-    const remote = await pushArchiveDayToFirestore(doc);
+    const remoteCurrent = await fetchArchiveDayFromFirestore(doc.date);
+    const localCurrent = loadArchiveDay(doc.date);
+    const mergedDoc = mergeArchiveDoc(mergeArchiveDoc(remoteCurrent, localCurrent), doc);
+    if(remoteCurrent?.erDutyDoctor){
+      mergedDoc.erDutyDoctor = remoteCurrent.erDutyDoctor;
+    }else if(localCurrent?.erDutyDoctor && !mergedDoc.erDutyDoctor){
+      mergedDoc.erDutyDoctor = localCurrent.erDutyDoctor;
+    }
+
+    saveArchiveDay(doc.date, mergedDoc);
+    if(remoteCurrent && archiveDocSignature(remoteCurrent) !== archiveDocSignature(mergedDoc)){
+      await pushArchiveBackupToFirestore(remoteCurrent, "before-overwrite");
+    }
+
+    const remote = await pushArchiveDayToFirestore(mergedDoc);
     if(remote.ok && remote.doc){
       saveArchiveDay(doc.date, { ...remote.doc, firebaseSynced:true, updatedAtLocal: fmtNow() });
       return { ok:true, doc: loadArchiveDay(doc.date) };
     }
-    return { ok:false, doc };
+    return { ok:false, doc: mergedDoc };
   }
   async function removeArchiveEntry(dateStr, id){
+    await hydrateArchiveDayFromFirestore(dateStr);
     const archiveDoc = loadArchiveDay(dateStr);
     if(!archiveDoc){
       alert("არქივის დღე ვერ მოიძებნა.");
@@ -3084,6 +3176,7 @@ document.getElementById("expandAll").addEventListener("click", () => {
     if(!window.confirm("ნამდვილად გინდა არქივიდან ამ ჩანაწერის წაშლა?")) return;
 
     if(nextEntries.length === 0){
+      await pushArchiveBackupToFirestore(archiveDoc, "before-delete");
       localStorage.removeItem(archiveDayKey(dateStr));
       renderArchive();
       const remoteDelete = await deleteArchiveDayFromFirestore(dateStr);
@@ -3122,15 +3215,24 @@ document.getElementById("expandAll").addEventListener("click", () => {
       console.error("Archive Firestore load failed", e);
     }
   }
+  async function syncAllLocalArchiveDaysToFirestore(){
+    const dates = listArchiveDates();
+    for(const dateStr of dates){
+      const doc = loadArchiveDay(dateStr);
+      if(!(doc && (doc.entries || []).length)) continue;
+      await persistArchiveDay(doc);
+    }
+  }
   async function archiveDayByDate(dateStr, options){
     const opts = options || {};
     await hydrateDayFromFirestore(dateStr);
+    const freshArchiveDoc = await hydrateArchiveDayFromFirestore(dateStr);
     const entries = loadDay(dateStr);
     if(!entries.length){
       return { ok:false, reason:"empty" };
     }
 
-    const previousDoctor = loadArchiveDay(dateStr)?.erDutyDoctor || "";
+    const previousDoctor = freshArchiveDoc?.erDutyDoctor || loadArchiveDay(dateStr)?.erDutyDoctor || "";
     let dutyDoctor = previousDoctor;
     if(opts.askDoctor !== false && !previousDoctor){
       const promptValue = window.prompt("შეიყვანე ER მორიგე ექიმი", previousDoctor);
@@ -3138,7 +3240,7 @@ document.getElementById("expandAll").addEventListener("click", () => {
       dutyDoctor = promptValue.trim();
     }
 
-    const localPayload = mergeArchiveDoc(loadArchiveDay(dateStr), {
+    const localPayload = mergeArchiveDoc(freshArchiveDoc || loadArchiveDay(dateStr), {
       date: dateStr,
       scopeKey: archiveScopeKey(),
       room: ROOM_KEY || "",
@@ -3151,14 +3253,9 @@ document.getElementById("expandAll").addEventListener("click", () => {
       entries: entries.map(sanitizeEntryForArchive)
     });
 
-    saveArchiveDay(dateStr, localPayload);
-    const remote = await pushArchiveDayToFirestore(localPayload);
-    if(remote.ok && remote.doc){
-      saveArchiveDay(dateStr, { ...remote.doc, firebaseSynced:true, updatedAtLocal: fmtNow() });
-    }
-
+    const persisted = await persistArchiveDay(localPayload);
     renderArchive();
-    return { ok:true, remoteOk:remote.ok };
+    return { ok:true, remoteOk:persisted.ok };
   }
   async function archiveSelectedDay(){
     const dateStr = getCurrentDay();
@@ -3190,20 +3287,17 @@ document.getElementById("expandAll").addEventListener("click", () => {
       saveDay(normalized, loadDay(existingLocal));
     }
 
-    const db = getFirestoreDb();
-    if(db){
-      for(const alias of aliases){
-        try{
-          const snap = await db.collection("ed_orderset_daily").doc(dailyDocId(alias)).get();
-          if(!snap.exists) continue;
-          const data = normalizeDailyDoc({ ...snap.data(), firebaseSynced:true });
-          if((data.entries || []).length){
-            saveDay(normalized, data.entries, { sync:false });
-            break;
-          }
-        }catch(e){
-          console.error("Restore by date failed", e);
-        }
+    for(const alias of aliases){
+      await hydrateDayFromFirestore(alias);
+      const restoredEntries = loadDay(alias);
+      if(restoredEntries.length){
+        if(alias !== normalized) saveDay(normalized, restoredEntries, { sync:false });
+        break;
+      }
+      const archiveDoc = await hydrateArchiveDayFromFirestore(alias);
+      if(archiveDoc && (archiveDoc.entries || []).length){
+        saveDay(normalized, archiveDoc.entries.map(sanitizeEntryForDaily), { sync:false });
+        break;
       }
     }
 
@@ -3292,13 +3386,8 @@ document.getElementById("expandAll").addEventListener("click", () => {
       if(!card) return;
       card.style.display = card.style.display === "none" ? "block" : "none";
     });
-    printDailyBtn?.addEventListener("click", async () => {
-      const dateStr = getCurrentDay();
-      printDailySummary(dateStr);
-      const result = await archiveDayByDate(dateStr, { askDoctor:true });
-      if(result.ok){
-        alert(result.remoteOk ? "ბეჭდვის შემდეგ დღის ცხრილი ავტომატურად დაემატა არქივში." : "ბეჭდვის შემდეგ დღის ცხრილი ლოკალურ არქივში დაემატა (Firebase სინქი ვერ დასრულდა).");
-      }
+    printDailyBtn?.addEventListener("click", () => {
+      printDailySummary(getCurrentDay());
     });
     clearDailyBtn?.addEventListener("click", () => {
       const dateStr = getCurrentDay();
@@ -3401,6 +3490,8 @@ document.getElementById("expandAll").addEventListener("click", () => {
     render();
     await initDailyArchive();
     await hydrateArchiveFromFirestore();
+    await syncAllLocalArchiveDaysToFirestore();
+    await syncAllLocalDaysToFirestore();
     renderArchive();
     applyViewMode();
     if(!IS_ARCHIVE_VIEW) consumePendingArchiveEdit();
