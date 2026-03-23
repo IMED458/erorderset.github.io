@@ -367,7 +367,7 @@
 <button class="btn" id="printDaily" type="button">დღის ცხრილის ბეჭდვა</button>
 <button class="btn" id="archiveDaily" type="button">არქივში გადატანა</button>
 <button class="btn" id="restoreDailyByDate" type="button">თარიღიდან აღდგენა</button>
-<a class="btn" href="?view=archive" id="toggleArchive" rel="noopener noreferrer" target="_blank">არქივი</a>
+<a class="btn" href="./archive.html" id="toggleArchive" rel="noopener noreferrer" target="_blank">არქივი</a>
 <button class="btn" id="clearDaily" title="მხოლოდ არჩეული დღის ჩანაწერების წაშლა" type="button">დღის გასუფთავება</button>
 </div>
 </header>
@@ -1188,10 +1188,26 @@
     const query = params.toString();
     return `${window.location.pathname}${query ? "?" + query : ""}`;
   }
+  function buildArchivePageUrl(){
+    const params = new URLSearchParams(window.location.search);
+    params.delete("view");
+    params.delete("editDate");
+    params.delete("editEntry");
+    const query = params.toString();
+    return `./archive.html${query ? "?" + query : ""}`;
+  }
+  function buildChecklistPageUrl(){
+    const params = new URLSearchParams(window.location.search);
+    params.delete("view");
+    params.delete("editDate");
+    params.delete("editEntry");
+    const query = params.toString();
+    return `./index.html${query ? "?" + query : ""}`;
+  }
   function configureArchiveLink(){
     const archiveLink = document.getElementById("toggleArchive");
     if(!archiveLink) return;
-    archiveLink.href = buildViewUrl(IS_ARCHIVE_VIEW ? "" : "archive");
+    archiveLink.href = IS_ARCHIVE_VIEW ? buildChecklistPageUrl() : buildArchivePageUrl();
     archiveLink.target = IS_ARCHIVE_VIEW ? "_self" : "_blank";
     archiveLink.rel = IS_ARCHIVE_VIEW ? "" : "noopener noreferrer";
     archiveLink.textContent = IS_ARCHIVE_VIEW ? "ჩექლისტზე დაბრუნება" : "არქივი";
