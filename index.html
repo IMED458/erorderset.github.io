@@ -2778,6 +2778,12 @@ document.getElementById("expandAll").addEventListener("click", () => {
     const meta = document.getElementById("dailyMeta");
     const tbody = document.getElementById("dailyTbody");
     if(!(card && meta && tbody)) return;
+    if(IS_ARCHIVE_VIEW){
+      card.style.display = "none";
+      meta.textContent = "";
+      tbody.innerHTML = "";
+      return;
+    }
 
     const entries = loadDay(dateStr);
     if(!entries.length){
@@ -3365,7 +3371,22 @@ document.getElementById("expandAll").addEventListener("click", () => {
     const restoreBtn = document.getElementById("restoreDailyByDate");
     const toggleArchive = document.getElementById("toggleArchive");
     const archiveCard = document.getElementById("archiveCard");
+    const dailyCard = document.getElementById("dailyCard");
     if(!(dayPick && addBtn)) return;
+
+    if(IS_ARCHIVE_VIEW){
+      clearDailyWatch();
+      if(dailyCard) dailyCard.style.display = "none";
+      if(archiveCard) archiveCard.style.display = "block";
+      if(archiveSearch) archiveSearch.value = "";
+      archiveSearch?.addEventListener("input", () => {
+        renderArchive();
+      });
+      toggleArchive?.addEventListener("click", () => {
+        window.location.href = buildViewUrl("");
+      });
+      return;
+    }
 
     if(!dayPick.value) dayPick.value = toLocalISODate();
     await activateDailyDate(dayPick.value);
