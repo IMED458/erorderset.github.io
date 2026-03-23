@@ -10,10 +10,41 @@
 <link href="erchecklist.png" rel="apple-touch-icon"/>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script>
+  (function(){
+    try{
+      var params = new URLSearchParams(window.location.search);
+      if((params.get("view") || "").trim().toLowerCase() === "archive"){
+        document.documentElement.setAttribute("data-view", "archive");
+      }
+    }catch(e){}
+  })();
+</script>
 <style>
     :root{
       --bg:#ffffff; --card:#ffffff; --muted:#6b7280; --text:#111827;
       --line:rgba(0,0,0,.12); --chip:#f3f4f6; --accent:#2563eb;
+    }
+    html[data-view="archive"] #mainChecklistCard,
+    html[data-view="archive"] #dailyCard,
+    html[data-view="archive"] .search,
+    html[data-view="archive"] .patient,
+    html[data-view="archive"] #expandAll,
+    html[data-view="archive"] #collapseAll,
+    html[data-view="archive"] #resetChecks,
+    html[data-view="archive"] #dayPick,
+    html[data-view="archive"] #addToDaily,
+    html[data-view="archive"] #cancelEdit,
+    html[data-view="archive"] #toggleDaily,
+    html[data-view="archive"] #printDaily,
+    html[data-view="archive"] #archiveDaily,
+    html[data-view="archive"] #restoreDailyByDate,
+    html[data-view="archive"] #clearDaily,
+    html[data-view="archive"] button[onclick="printSelected()"]{
+      display:none !important;
+    }
+    html[data-view="archive"] #archiveCard{
+      display:block !important;
     }
     *{box-sizing:border-box}
     body{
