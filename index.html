@@ -409,7 +409,7 @@
 <div class="content">
 <p class="statusNote" id="archiveMeta" style="margin-top:0;"></p>
 <div class="search archiveSearch">
-<input aria-label="არქივში ძებნა" id="archiveSearch" placeholder="მოძებნე თარიღი, ER ექიმი, პაციენტი ან კვლევა" type="text"/>
+<input aria-label="არქივში ძებნა" autocomplete="off" id="archiveSearch" placeholder="მოძებნე თარიღი, ER ექიმი, პაციენტი ან კვლევა" spellcheck="false" type="text"/>
 </div>
 <div class="archiveList" id="archiveGroups"></div>
 </div>
@@ -2921,7 +2921,7 @@ document.getElementById("expandAll").addEventListener("click", () => {
         return acc;
       }, { essential:0, optional:0, custom:0 });
       return `
-        <div class="archiveGroup ${needle ? "open" : ""}" data-date="${dateStr}">
+        <div class="archiveGroup" data-date="${dateStr}">
           <button class="archiveToggle" type="button">
             <span>${dateStr} • ER მორიგე ექიმი: ${escapeHTML(doc?.erDutyDoctor || "—")}</span>
             <span class="tag">პაციენტები: ${entries.length} • E/O/C: ${counts.essential}/${counts.optional}/${counts.custom}</span>
@@ -3369,6 +3369,7 @@ document.getElementById("expandAll").addEventListener("click", () => {
 
     if(!dayPick.value) dayPick.value = toLocalISODate();
     await activateDailyDate(dayPick.value);
+    if(archiveSearch) archiveSearch.value = "";
     renderArchive();
     if(archiveCard && !IS_ARCHIVE_VIEW) archiveCard.style.display = "none";
     archiveSearch?.addEventListener("input", () => {
