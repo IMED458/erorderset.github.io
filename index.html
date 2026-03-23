@@ -367,7 +367,7 @@
 <button class="btn" id="printDaily" type="button">დღის ცხრილის ბეჭდვა</button>
 <button class="btn" id="archiveDaily" type="button">არქივში გადატანა</button>
 <button class="btn" id="restoreDailyByDate" type="button">თარიღიდან აღდგენა</button>
-<button class="btn" id="toggleArchive" type="button">არქივი</button>
+<a class="btn" href="?view=archive" id="toggleArchive" rel="noopener noreferrer" target="_blank">არქივი</a>
 <button class="btn" id="clearDaily" title="მხოლოდ არჩეული დღის ჩანაწერების წაშლა" type="button">დღის გასუფთავება</button>
 </div>
 </header>
@@ -1188,12 +1188,13 @@
     const query = params.toString();
     return `${window.location.pathname}${query ? "?" + query : ""}`;
   }
-  function openArchiveTab(){
-    const archiveUrl = buildViewUrl("archive");
-    const win = window.open(archiveUrl, "_blank", "noopener,noreferrer");
-    if(!win){
-      window.location.href = archiveUrl;
-    }
+  function configureArchiveLink(){
+    const archiveLink = document.getElementById("toggleArchive");
+    if(!archiveLink) return;
+    archiveLink.href = buildViewUrl(IS_ARCHIVE_VIEW ? "" : "archive");
+    archiveLink.target = IS_ARCHIVE_VIEW ? "_self" : "_blank";
+    archiveLink.rel = IS_ARCHIVE_VIEW ? "" : "noopener noreferrer";
+    archiveLink.textContent = IS_ARCHIVE_VIEW ? "ჩექლისტზე დაბრუნება" : "არქივი";
   }
   function applyViewMode(){
     const mainChecklistCard = document.getElementById("mainChecklistCard");
@@ -1232,7 +1233,7 @@
       const el = document.getElementById(id);
       if(el) el.style.display = "none";
     });
-    if(toggleArchiveBtn) toggleArchiveBtn.textContent = "ჩექლისტზე დაბრუნება";
+    configureArchiveLink();
   }
   const firebaseConfig = window.ED_FIREBASE_CONFIG || {
     apiKey: "AIzaSyDImJ5LcB6ljpqx0t7koLGvpPmWJTxfFzE",
@@ -3382,9 +3383,6 @@ document.getElementById("expandAll").addEventListener("click", () => {
       archiveSearch?.addEventListener("input", () => {
         renderArchive();
       });
-      toggleArchive?.addEventListener("click", () => {
-        window.location.href = buildViewUrl("");
-      });
       return;
     }
 
@@ -3460,13 +3458,6 @@ document.getElementById("expandAll").addEventListener("click", () => {
     });
     archiveBtn?.addEventListener("click", archiveSelectedDay);
     restoreBtn?.addEventListener("click", restoreDayByPrompt);
-    toggleArchive?.addEventListener("click", () => {
-      if(IS_ARCHIVE_VIEW){
-        window.location.href = buildViewUrl("");
-        return;
-      }
-      openArchiveTab();
-    });
   }
 
   if(ptDischargeBtn){
