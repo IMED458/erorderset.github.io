@@ -969,7 +969,8 @@
         : `<div class="empty-card">${escapeHTML(message)}</div>`;
     }
     function renderMetricCards(metrics){
-      const grid = document.getElementById("metricsGrid");
+      const grid = document.getElementById("metricsGrid") || document.getElementById("overviewSection");
+      if(!grid) return;
       grid.innerHTML = metrics.map(metric => `
         <article class="metric-card">
           <div class="metric-tag">${escapeHTML(metric.tag)}</div>
