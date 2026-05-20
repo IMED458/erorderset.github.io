@@ -345,6 +345,20 @@
       font-weight:700;
       padding:2px 0 4px;
     }
+    .filter-card input{
+      width:100%;
+      border:0;
+      outline:none;
+      background:transparent;
+      color:var(--text);
+      font-size:14px;
+      font-weight:700;
+      padding:2px 0 4px;
+    }
+    .filter-card input::placeholder{
+      color:#8aa0bd;
+      font-weight:600;
+    }
     .metrics{
       display:grid;
       grid-template-columns:repeat(4, minmax(0, 1fr));
@@ -765,6 +779,18 @@
             <label class="filter-label" for="testFilter">კონკრეტული კვლევა</label>
             <select id="testFilter"></select>
           </div>
+          <div class="filter-card">
+            <label class="filter-label" for="statsSearchTest">კვლევის ძებნა</label>
+            <input id="statsSearchTest" placeholder="მაგ: ტროპონინი, CT, MRI" type="text"/>
+          </div>
+          <div class="filter-card">
+            <label class="filter-label" for="statsSearchDoctor">ექიმის ძებნა</label>
+            <input id="statsSearchDoctor" placeholder="ექიმის სახელი და გვარი" type="text"/>
+          </div>
+          <div class="filter-card">
+            <label class="filter-label" for="statsSearchDepartment">განყოფილების ძებნა</label>
+            <input id="statsSearchDepartment" placeholder="მაგ: კარდიოლოგია" type="text"/>
+          </div>
         </div>
       </section>
 
@@ -839,7 +865,10 @@
       tests: [],
       months: [],
       selectedMonth: "all",
-      selectedTest: ""
+      selectedTest: "",
+      searchTest: "",
+      searchDoctor: "",
+      searchDepartment: ""
     };
 
     function escapeHTML(value){
@@ -878,6 +907,9 @@
     function safeSpecialty(name){
       const cleaned = String(name || "").trim();
       return cleaned || "უცნობი სპეციალობა";
+    }
+    function hasActiveSearch(){
+      return !!(state.searchTest || state.searchDoctor || state.searchDepartment);
     }
     function normalizeTestName(text){
       return String(text || "")
@@ -1114,6 +1146,42 @@
         </div>
       `;
     }
+    function applySearchFilters(rows){
+      const testNeedle = norm(state.searchTest);
+      const doctorNeedle = norm(state.searchDoctor);
+      const departmentNeedle = norm(state.searchDepartment);
+      return rows.filter(row => {
+        if(testNeedle && !norm(row.testName).includes(testNeedle)) return false;
+        if(doctorNeedle && !norm(row.doctor).includes(doctorNeedle)) return false;
+        if(departmentNeedle && !norm(row.specialty).includes(departmentNeedle)) return false;
+        return true;
+      });
+    }
+    function getFilteredContext(){
+      const month = state.selectedMonth;
+      const monthDocs = month === "all" ? state.docs : state.docs.filter(doc => doc.month === month);
+      const monthEntries = month === "all" ? state.entries : state.entries.filter(entry => entry.month === month);
+      const monthTests = month === "all" ? state.tests : state.tests.filter(test => test.month === month);
+      const filteredTests = applySearchFilters(monthTests);
+
+      if(!hasActiveSearch()){
+        return {
+          month,
+          filteredDocs: monthDocs,
+          filteredEntries: monthEntries,
+          filteredTests
+        };
+      }
+
+      const entryIds = new Set(filteredTests.map(test => test.entryId));
+      const dates = new Set(filteredTests.map(test => test.date));
+      return {
+        month,
+        filteredDocs: monthDocs.filter(doc => dates.has(doc.date)),
+        filteredEntries: monthEntries.filter(entry => entryIds.has(entry.id)),
+        filteredTests
+      };
+    }
     function flattenArchiveDocs(docs){
       const entries = [];
       const tests = [];
@@ -1218,10 +1286,7 @@
       }
     }
     function renderDashboard(){
-      const month = state.selectedMonth;
-      const filteredDocs = month === "all" ? state.docs : state.docs.filter(doc => doc.month === month);
-      const filteredEntries = month === "all" ? state.entries : state.entries.filter(entry => entry.month === month);
-      const filteredTests = month === "all" ? state.tests : state.tests.filter(test => test.month === month);
+      const { month, filteredDocs, filteredEntries, filteredTests } = getFilteredContext();
       const knownDoctorRows = filteredTests.filter(test => test.doctorKnown);
       const knownSpecialtyRows = filteredTests.filter(test => test.specialtyKnown);
       const ctRows = filteredTests.filter(test => test.isCt && test.doctorKnown);
@@ -1236,7 +1301,13 @@
       const leaderSpecialty = topSpecialties[0] || { label:"მონაცემი არ არის", count:0 };
 
       document.getElementById("dashboardGrid").classList.toggle("hidden", !state.docs.length);
-      document.getElementById("statsDateChip").textContent = `პერიოდი: ${monthLabel(month)}`;
+      const activeFilters = [];
+      if(state.searchTest) activeFilters.push(`კვლევა: ${state.searchTest}`);
+      if(state.searchDoctor) activeFilters.push(`ექიმი: ${state.searchDoctor}`);
+      if(state.searchDepartment) activeFilters.push(`განყოფილება: ${state.searchDepartment}`);
+      document.getElementById("statsDateChip").textContent = activeFilters.length
+        ? `პერიოდი: ${monthLabel(month)} • ${activeFilters.join(" • ")}`
+        : `პერიოდი: ${monthLabel(month)}`;
 
       renderMetricCards([
         { tag:"სულ კვლევები", value:String(filteredTests.length), meta:`${monthLabel(month)} პერიოდში დაფიქსირებული ყველა კვლევა.` },
@@ -1248,7 +1319,7 @@
       const trendData = state.months.slice().sort().map(monthKey => ({
         month: monthKey,
         shortLabel: monthNamesKa[Number(monthKey.slice(5, 7)) - 1]?.slice(0, 3) || monthKey.slice(5, 7),
-        count: state.tests.filter(test => test.month === monthKey).length
+        count: applySearchFilters(state.tests.filter(test => test.month === monthKey)).length
       }));
       document.getElementById("monthlyTrend").innerHTML = renderColumnChart(trendData, month);
 
@@ -1270,7 +1341,10 @@
       );
 
       const testFilter = document.getElementById("testFilter");
-      const selectableTests = uniq((filteredTests.length ? filteredTests : state.tests).map(test => test.testName)).sort((a, b) => a.localeCompare(b, "ka"));
+      const sourceForSelect = filteredTests.length
+        ? filteredTests
+        : (hasActiveSearch() ? [] : (month === "all" ? state.tests : state.tests.filter(test => test.month === month)));
+      const selectableTests = uniq(sourceForSelect.map(test => test.testName)).sort((a, b) => a.localeCompare(b, "ka"));
       if(!selectableTests.length){
         state.selectedTest = "";
       }else if(!selectableTests.includes(state.selectedTest)){
@@ -1281,7 +1355,7 @@
         : `<option value="">კვლევა არ არის</option>`;
 
       const selectedRows = state.selectedTest
-        ? (filteredTests.length ? filteredTests : state.tests).filter(test => test.testName === state.selectedTest)
+        ? filteredTests.filter(test => test.testName === state.selectedTest)
         : [];
       renderSelectedTestLeaders(state.selectedTest, selectedRows);
     }
@@ -1339,6 +1413,9 @@
       const app = document.getElementById("statsApp");
       const monthFilter = document.getElementById("monthFilter");
       const testFilter = document.getElementById("testFilter");
+      const searchTest = document.getElementById("statsSearchTest");
+      const searchDoctor = document.getElementById("statsSearchDoctor");
+      const searchDepartment = document.getElementById("statsSearchDepartment");
 
       form.addEventListener("submit", async ev => {
         ev.preventDefault();
@@ -1361,6 +1438,18 @@
       });
       testFilter.addEventListener("change", () => {
         state.selectedTest = testFilter.value || "";
+        renderDashboard();
+      });
+      searchTest.addEventListener("input", () => {
+        state.searchTest = (searchTest.value || "").trim();
+        renderDashboard();
+      });
+      searchDoctor.addEventListener("input", () => {
+        state.searchDoctor = (searchDoctor.value || "").trim();
+        renderDashboard();
+      });
+      searchDepartment.addEventListener("input", () => {
+        state.searchDepartment = (searchDepartment.value || "").trim();
         renderDashboard();
       });
     }
