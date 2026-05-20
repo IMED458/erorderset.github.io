@@ -28,6 +28,7 @@
       --glow:0 0 0 1px rgba(255,255,255,.5), 0 18px 50px rgba(76, 157, 255, .16);
     }
     *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
     html, body{margin:0; min-height:100%}
     body{
       font-family:Calibri,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
@@ -197,17 +198,21 @@
     }
     .nav{
       display:grid;
-      gap:10px;
+      gap:18px;
+      margin-top:10px;
     }
     .nav-item{
       border:0;
-      border-radius:22px;
-      padding:16px 18px;
+      border-radius:999px;
+      padding:22px 26px;
       text-align:left;
       color:var(--muted);
       background:transparent;
-      font-size:15px;
-      font-weight:700;
+      font-size:23px;
+      font-weight:800;
+      letter-spacing:-.03em;
+      cursor:pointer;
+      transition:all .18s ease;
     }
     .nav-item.active{
       background:linear-gradient(135deg, #1f3b67 0%, #2c7ef8 100%);
@@ -673,6 +678,9 @@
       font-size:14px;
       line-height:1.55;
     }
+    .section-anchor{
+      scroll-margin-top:24px;
+    }
     @keyframes spin{
       to{ transform:rotate(360deg); }
     }
@@ -742,10 +750,10 @@
       </div>
 
       <div class="nav">
-        <button class="nav-item active" type="button">Overview</button>
-        <button class="nav-item" type="button">Doctors</button>
-        <button class="nav-item" type="button">Departments</button>
-        <button class="nav-item" type="button">Monthly Stats</button>
+        <button class="nav-item active" data-target="overviewSection" type="button">Overview</button>
+        <button class="nav-item" data-target="doctorsSection" type="button">Doctors</button>
+        <button class="nav-item" data-target="departmentsSection" type="button">Departments</button>
+        <button class="nav-item" data-target="monthlySection" type="button">Monthly Stats</button>
       </div>
 
       <div class="scope-card">
@@ -795,10 +803,10 @@
       </section>
 
       <div id="statsStatus"></div>
-      <section class="metrics" id="metricsGrid"></section>
+      <section class="metrics section-anchor" id="overviewSection"></section>
 
       <section class="dashboard-grid hidden" id="dashboardGrid">
-        <article class="panel panel-lg">
+        <article class="panel panel-lg section-anchor" id="monthlySection">
           <h3>თვიური ტენდენცია</h3>
           <p class="panel-sub">თვეების მიხედვით რამდენი კვლევა დაემატა არქივში. არჩეული თვე მონიშნულია გამოკვეთილად.</p>
           <div id="monthlyTrend"></div>
@@ -816,13 +824,13 @@
           <div id="topTestsTable"></div>
         </article>
 
-        <article class="panel panel-sm">
+        <article class="panel panel-sm section-anchor" id="departmentsSection">
           <h3>განყოფილებების განაწილება</h3>
           <p class="panel-sub">შეკვეთებში ყველაზე აქტიური სპეციალობები/განყოფილებები.</p>
           <div id="departmentSplit"></div>
         </article>
 
-        <article class="panel panel-sm">
+        <article class="panel panel-sm section-anchor" id="doctorsSection">
           <h3>ექიმების ლიდერბორდი</h3>
           <p class="panel-sub">ყველაზე მეტი დანიშნული კვლევის მქონე ექიმები.</p>
           <div class="ranking-list" id="doctorRanking"></div>
@@ -832,6 +840,12 @@
           <h3>CT / კტ ლიდერები</h3>
           <p class="panel-sub">კომპიუტერული ტომოგრაფიისა და CT ტიპის კვლევების აქტიური შემკვეთები.</p>
           <div class="ranking-list" id="ctRanking"></div>
+        </article>
+
+        <article class="panel panel-sm">
+          <h3>ყველაზე ხშირი კვლევები</h3>
+          <p class="panel-sub">ყველაზე ხშირად ჩატარებული/დანიშნული კვლევების სწრაფი ranked list.</p>
+          <div class="ranking-list" id="frequentTestsList"></div>
         </article>
 
         <article class="panel panel-wide">
@@ -1146,6 +1160,46 @@
         </div>
       `;
     }
+    function setupSectionNav(){
+      const buttons = [...document.querySelectorAll(".nav-item[data-target]")];
+      const sections = buttons
+        .map(button => document.getElementById(button.dataset.target || ""))
+        .filter(Boolean);
+
+      const setActive = (targetId) => {
+        buttons.forEach(button => {
+          button.classList.toggle("active", button.dataset.target === targetId);
+        });
+      };
+
+      buttons.forEach(button => {
+        button.addEventListener("click", () => {
+          const targetId = button.dataset.target || "";
+          const section = document.getElementById(targetId);
+          if(section){
+            section.scrollIntoView({ behavior:"smooth", block:"start" });
+            setActive(targetId);
+          }
+        });
+      });
+
+      const updateFromScroll = () => {
+        let activeId = "overviewSection";
+        let bestOffset = Number.POSITIVE_INFINITY;
+        sections.forEach(section => {
+          const rect = section.getBoundingClientRect();
+          const offset = Math.abs(rect.top - 120);
+          if(rect.top <= window.innerHeight * 0.55 && offset < bestOffset){
+            bestOffset = offset;
+            activeId = section.id;
+          }
+        });
+        setActive(activeId);
+      };
+
+      window.addEventListener("scroll", updateFromScroll, { passive:true });
+      updateFromScroll();
+    }
     function applySearchFilters(rows){
       const testNeedle = norm(state.searchTest);
       const doctorNeedle = norm(state.searchDoctor);
@@ -1339,6 +1393,11 @@
         topCtDoctors.map(item => ({ ...item, sub:"CT / კტ ტიპის კვლევები" })),
         "CT / კტ კვლევებზე ამ ფილტრში ექიმის ჩანაწერი არ არის."
       );
+      renderRankingList(
+        "frequentTestsList",
+        topTests.slice(0, 12).map(item => ({ ...item, sub:"ყველაზე ხშირი კვლევა ამ ფილტრში" })),
+        "ამ ფილტრში კვლევების ranked list ჯერ არ არის."
+      );
 
       const testFilter = document.getElementById("testFilter");
       const sourceForSelect = filteredTests.length
@@ -1455,6 +1514,7 @@
     }
 
     setupEvents();
+    setupSectionNav();
   </script>
 </body>
 </html>
