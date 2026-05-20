@@ -2105,12 +2105,12 @@
   function getDailyDocRef(dateStr){
     const db = getFirestoreDb();
     if(!(db && dateStr)) return null;
-    return db.collection("ed_orderset_archive").doc(dailyDocId(dateStr));
+    return db.collection("ed_orderset_daily").doc(dailyDocId(dateStr));
   }
   function getLegacyDailyDocRef(dateStr){
     const db = getFirestoreDb();
     if(!(db && dateStr)) return null;
-    return db.collection("ed_orderset_daily").doc(legacyDailyDocId(dateStr));
+    return db.collection("ed_orderset_archive").doc(legacyDailyDocId(dateStr));
   }
   function clearDailyWatch(){
     if(typeof dailyWatchUnsub === "function"){
@@ -3934,6 +3934,71 @@ document.getElementById("expandAll").addEventListener("click", () => {
       entries: doc?.entries || []
     };
   }
+  function decodeFirestoreValue(node){
+    if(!node || typeof node !== "object") return null;
+    if(Object.prototype.hasOwnProperty.call(node, "stringValue")) return String(node.stringValue || "");
+    if(Object.prototype.hasOwnProperty.call(node, "integerValue")) return Number(node.integerValue || 0);
+    if(Object.prototype.hasOwnProperty.call(node, "doubleValue")) return Number(node.doubleValue || 0);
+    if(Object.prototype.hasOwnProperty.call(node, "booleanValue")) return !!node.booleanValue;
+    if(Object.prototype.hasOwnProperty.call(node, "nullValue")) return null;
+    if(Object.prototype.hasOwnProperty.call(node, "timestampValue")) return String(node.timestampValue || "");
+    if(node.arrayValue){
+      return (node.arrayValue.values || []).map(decodeFirestoreValue);
+    }
+    if(node.mapValue){
+      const out = {};
+      Object.entries(node.mapValue.fields || {}).forEach(([key, value]) => {
+        out[key] = decodeFirestoreValue(value);
+      });
+      return out;
+    }
+    return null;
+  }
+  async function fetchArchiveDocsViaRest(){
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = controller ? window.setTimeout(() => controller.abort(), 12000) : null;
+    try{
+      const response = await fetch(`https://firestore.googleapis.com/v1/projects/${encodeURIComponent(firebaseConfig.projectId)}/databases/(default)/documents:runQuery?key=${encodeURIComponent(firebaseConfig.apiKey)}`, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({
+          structuredQuery: {
+            from: [{ collectionId:"ed_orderset_archive" }],
+            where: {
+              fieldFilter: {
+                field: { fieldPath:"scopeKey" },
+                op: "EQUAL",
+                value: { stringValue: archiveScopeKey() }
+              }
+            }
+          }
+        }),
+        signal: controller ? controller.signal : undefined
+      });
+      if(!response.ok){
+        throw new Error(`Firestore REST ${response.status}`);
+      }
+      const payload = await response.json();
+      return (Array.isArray(payload) ? payload : [])
+        .map(row => {
+          const data = decodeFirestoreValue({ mapValue:{ fields: row?.document?.fields || {} } });
+          return normalizeArchiveDoc({ ...(data || {}), firebaseSynced:true });
+        })
+        .filter(doc => doc?.date && doc.scopeKey === archiveScopeKey())
+        .sort((a, b) => a.date.localeCompare(b.date));
+    } finally{
+      if(timer) window.clearTimeout(timer);
+    }
+  }
+  async function fetchArchiveDocsViaSdk(){
+    const db = getFirestoreDb();
+    if(!db) return [];
+    const snap = await db.collection("ed_orderset_archive").where("scopeKey", "==", archiveScopeKey()).get();
+    return snap.docs
+      .map(docSnap => normalizeArchiveDoc({ ...docSnap.data(), firebaseSynced:true }))
+      .filter(doc => doc?.date)
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }
   function mergeArchiveDoc(existing, incoming){
     const normalizedExisting = existing ? normalizeArchiveDoc(existing) : null;
     const normalizedIncoming = normalizeArchiveDoc(incoming);
@@ -4080,18 +4145,22 @@ document.getElementById("expandAll").addEventListener("click", () => {
     alert("ჩანაწერი ლოკალურად წაიშალა, მაგრამ Firebase სინქი ვერ დასრულდა.");
   }
   async function hydrateArchiveFromFirestore(){
-    const db = getFirestoreDb();
-    if(!db) return;
+    let docs = [];
     try{
-      const snap = await db.collection("ed_orderset_archive").where("scopeKey", "==", archiveScopeKey()).get();
-      snap.forEach(docSnap => {
-        const data = normalizeArchiveDoc({ ...docSnap.data(), firebaseSynced:true });
-        if(!data.date) return;
-        saveArchiveDay(data.date, mergeArchiveDoc(loadArchiveDay(data.date), data));
-      });
-    }catch(e){
-      console.error("Archive Firestore load failed", e);
+      docs = await fetchArchiveDocsViaRest();
+    }catch(restError){
+      console.warn("Archive REST load failed, falling back to Firestore SDK.", restError);
+      try{
+        docs = await fetchArchiveDocsViaSdk();
+      }catch(sdkError){
+        console.error("Archive Firestore load failed", sdkError);
+        return;
+      }
     }
+    docs.forEach(data => {
+      if(!data.date) return;
+      saveArchiveDay(data.date, mergeArchiveDoc(loadArchiveDay(data.date), data));
+    });
   }
   async function syncAllLocalArchiveDaysToFirestore(){
     const dates = listArchiveDates();
@@ -4215,6 +4284,10 @@ document.getElementById("expandAll").addEventListener("click", () => {
       if(dailyCard) dailyCard.style.display = "none";
       if(archiveCard) archiveCard.style.display = "block";
       if(archiveSearch) archiveSearch.value = "";
+      const archiveMeta = document.getElementById("archiveMeta");
+      const archiveGroups = document.getElementById("archiveGroups");
+      if(archiveMeta) archiveMeta.textContent = "არქივი იტვირთება...";
+      if(archiveGroups) archiveGroups.innerHTML = `<div class="archiveEmpty">მიმდინარეობს არქივის ჩატვირთვა...</div>`;
       archiveSearch?.addEventListener("input", () => {
         renderArchive();
       });
