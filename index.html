@@ -63,15 +63,34 @@
       border:1px solid var(--line); background:var(--card); color:var(--text);
       padding:8px 10px; border-radius:10px; font-size:11px; cursor:pointer;
     }
+    .toolbar a.btn{
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+    }
     .btn:hover{border-color:rgba(0,0,0,.22)}
     #ptTransferBtn{ background:#fca5a5; }
     #ptDischargeBtn{ background:#86efac; }
     #addToDaily{ background:#fde68a; }
-    #archiveDaily{ background:#93c5fd; }
+    #archiveDaily{
+      background:linear-gradient(135deg, #93c5fd 0%, #bfdbfe 100%);
+      box-shadow:0 0 0 1px rgba(59,130,246,.16), 0 0 0 0 rgba(96,165,250,.45), 0 10px 24px rgba(37,99,235,.18);
+      animation:archiveGlow 2.8s ease-in-out infinite;
+    }
     #restoreDailyByDate{ background:#c4b5fd; }
     #toggleArchive{ background:#bfdbfe; }
+    #toggleStats{ background:#a7f3d0; }
     #resetChecks, #clearDaily{ background:#f87171; }
     #dailyTbody button[data-del]{ background:#f87171; }
+    @keyframes archiveGlow{
+      0%, 100%{
+        box-shadow:0 0 0 1px rgba(59,130,246,.16), 0 0 0 0 rgba(96,165,250,.30), 0 10px 24px rgba(37,99,235,.18);
+      }
+      50%{
+        box-shadow:0 0 0 1px rgba(59,130,246,.18), 0 0 0 8px rgba(96,165,250,.12), 0 14px 32px rgba(37,99,235,.24);
+      }
+    }
     .search{
       display:flex; align-items:center; gap:8px; padding:8px 10px;
       border:1px solid var(--line); border-radius:10px; background:var(--card);
@@ -103,6 +122,13 @@
     }
     .mini::placeholder{color:rgba(0,0,0,.45)}
     .mini:focus{border-color:rgba(37,99,235,.55)}
+    .mini.invalid-field{
+      border-color:#ef4444;
+      box-shadow:0 0 0 3px rgba(239,68,68,.12);
+    }
+    @media (prefers-reduced-motion: reduce){
+      #archiveDaily{ animation:none; }
+    }
 
 .grid{
       display:grid; grid-template-columns: 380px 1fr; gap:14px;
@@ -380,6 +406,7 @@
   <option value="ჰეპატოლოგია"></option>
   <option value="ინფექციური"></option>
   <option value="შინაგანი მედიცინა"></option>
+  <option value="ზოგადი ქირურგია"></option>
   <option value="კარდიოლოგია"></option>
   <option value="ონკოჰემატოლოგია 1"></option>
   <option value="ონკოჰემატოლოგია 2"></option>
@@ -399,6 +426,7 @@
 <button class="btn" id="archiveDaily" type="button">არქივში გადატანა</button>
 <button class="btn" id="restoreDailyByDate" type="button">თარიღიდან აღდგენა</button>
 <a class="btn" href="./archive.html" id="toggleArchive" rel="noopener noreferrer" target="_blank">არქივი</a>
+<a class="btn" href="./stats.html" id="toggleStats" rel="noopener noreferrer" target="_blank">სტატისტიკა</a>
 <button class="btn" id="clearDaily" title="მხოლოდ არჩეული დღის ჩანაწერების წაშლა" type="button">დღის გასუფთავება</button>
 </div>
 </header>
@@ -1227,6 +1255,14 @@
     const query = params.toString();
     return `./archive.html${query ? "?" + query : ""}`;
   }
+  function buildStatsPageUrl(){
+    const params = new URLSearchParams(window.location.search);
+    params.delete("view");
+    params.delete("editDate");
+    params.delete("editEntry");
+    const query = params.toString();
+    return `./stats.html${query ? "?" + query : ""}`;
+  }
   function buildChecklistPageUrl(){
     const params = new URLSearchParams(window.location.search);
     params.delete("view");
@@ -1237,11 +1273,18 @@
   }
   function configureArchiveLink(){
     const archiveLink = document.getElementById("toggleArchive");
-    if(!archiveLink) return;
-    archiveLink.href = IS_ARCHIVE_VIEW ? buildChecklistPageUrl() : buildArchivePageUrl();
-    archiveLink.target = IS_ARCHIVE_VIEW ? "_self" : "_blank";
-    archiveLink.rel = IS_ARCHIVE_VIEW ? "" : "noopener noreferrer";
-    archiveLink.textContent = IS_ARCHIVE_VIEW ? "ჩექლისტზე დაბრუნება" : "არქივი";
+    const statsLink = document.getElementById("toggleStats");
+    if(archiveLink){
+      archiveLink.href = IS_ARCHIVE_VIEW ? buildChecklistPageUrl() : buildArchivePageUrl();
+      archiveLink.target = IS_ARCHIVE_VIEW ? "_self" : "_blank";
+      archiveLink.rel = IS_ARCHIVE_VIEW ? "" : "noopener noreferrer";
+      archiveLink.textContent = IS_ARCHIVE_VIEW ? "ჩექლისტზე დაბრუნება" : "არქივი";
+    }
+    if(statsLink){
+      statsLink.href = buildStatsPageUrl();
+      statsLink.target = "_blank";
+      statsLink.rel = "noopener noreferrer";
+    }
   }
   function applyViewMode(){
     const mainChecklistCard = document.getElementById("mainChecklistCard");
@@ -2037,6 +2080,85 @@ function otherTextKey(id){ return storageKey("other_text_" + id); }
     const labelEl = cb.closest(".chk")?.querySelector("label") || cb.parentElement?.querySelector("label");
     return labelEl ? labelEl.textContent.trim() : "";
   }
+  function clearInvalidChecklistFields(){
+    document.querySelectorAll(".invalid-field").forEach(el => el.classList.remove("invalid-field"));
+  }
+  function markInvalidField(el){
+    if(el) el.classList.add("invalid-field");
+  }
+  function validateCurrentChecklistInputs(){
+    clearInvalidChecklistFields();
+    const checked = Array.from(document.querySelectorAll('.chk input[type="checkbox"][data-persist="1"]:checked'));
+    const issues = [];
+    let firstInvalid = null;
+
+    checked.forEach(cb => {
+      const row = cb.closest(".chk");
+      const rawText = getChecklistLabelText(cb);
+      const compactText = rawText || "კვლევა";
+
+      if(isCustomOtherCheckbox(cb)){
+        const otherInput = row?.querySelector(`input[data-other-text-for="${cb.id}"]`);
+        const otherValue = (otherInput?.value || "").trim();
+        if(!otherValue){
+          markInvalidField(otherInput);
+          if(!firstInvalid) firstInvalid = otherInput;
+          issues.push("სხვა კვლევისთვის შეავსე დასახელება.");
+        }
+      }
+
+      if(needsOrdererMeta(cb, compactText)){
+        const doctorInput = row?.querySelector(`input[data-orderer-for="${cb.id}"]`);
+        const specInput = row?.querySelector(`input[data-orderer-spec-for="${cb.id}"]`);
+        const doctorValue = (doctorInput?.value || "").trim();
+        const specValue = (specInput?.value || "").trim();
+
+        if(!doctorValue){
+          markInvalidField(doctorInput);
+          if(!firstInvalid) firstInvalid = doctorInput;
+          issues.push(`${compactText} — ექიმის სახელი და გვარი სავალდებულოა.`);
+        }
+        if(!specValue){
+          markInvalidField(specInput);
+          if(!firstInvalid) firstInvalid = specInput;
+          issues.push(`${compactText} — სპეციალობა სავალდებულოა.`);
+        }
+      }
+    });
+
+    if(issues.length){
+      const uniqueIssues = uniqPreserve(issues).slice(0, 8);
+      alert(`გთხოვ, ჯერ შეავსო სავალდებულო ველები:\n\n- ${uniqueIssues.join("\n- ")}`);
+      try{ firstInvalid?.focus(); }catch(e){}
+      return false;
+    }
+    return true;
+  }
+  function validateEntryListForArchive(entries){
+    const issues = [];
+    (entries || []).forEach(entry => {
+      const patientName = entry?.pt?.name || "უცნობი პაციენტი";
+      (entry?.tests || []).forEach(test => {
+        const label = (test?.text || "").trim() || "კვლევა";
+        if(test?.custom && !label.replace(/^სხვა:\s*/i, "").trim()){
+          issues.push(`${patientName} — სხვა კვლევისთვის დასახელება აკლია.`);
+        }
+        if((test?.optional || test?.custom) && !(test?.ordererName || "").trim()){
+          issues.push(`${patientName} — ${label}: ექიმის სახელი და გვარი აკლია.`);
+        }
+        if((test?.optional || test?.custom) && !(test?.ordererSpec || "").trim()){
+          issues.push(`${patientName} — ${label}: სპეციალობა აკლია.`);
+        }
+      });
+    });
+
+    if(issues.length){
+      const uniqueIssues = uniqPreserve(issues).slice(0, 10);
+      alert(`არქივში გადატანამდე ყველა არჩევით/სხვა კვლევაზე ექიმი და სპეციალობა უნდა იყოს შევსებული:\n\n- ${uniqueIssues.join("\n- ")}`);
+      return false;
+    }
+    return true;
+  }
   function makeOrdererWrap(cb, parentKey){
     const wrap = document.createElement("div");
     wrap.className = "orderer-wrap";
@@ -2600,6 +2722,7 @@ document.getElementById("expandAll").addEventListener("click", () => {
     el.dispatchEvent(new Event("change", { bubbles: true }));
   }
   function buildEntryFromForm(preserve){
+    if(!validateCurrentChecklistInputs()) return null;
     const pt = readPatientFields();
     const tests = getSelectedTestsSnapshot();
     if(!pt.name && tests.length === 0){
@@ -3325,6 +3448,9 @@ document.getElementById("expandAll").addEventListener("click", () => {
     if(!entries.length){
       return { ok:false, reason:"empty" };
     }
+    if(!validateEntryListForArchive(entries)){
+      return { ok:false, reason:"missing-orderer-meta" };
+    }
 
     const previousDoctor = freshArchiveDoc?.erDutyDoctor || loadArchiveDay(dateStr)?.erDutyDoctor || "";
     let dutyDoctor = previousDoctor;
@@ -3363,6 +3489,7 @@ document.getElementById("expandAll").addEventListener("click", () => {
       return;
     }
     if(result.reason === "cancelled") return;
+    if(result.reason === "missing-orderer-meta") return;
 
     alert(result.remoteOk ? "დღის ცხრილი არქივში დაემატა (დღიური არ წაიშალა)." : "დღის ცხრილი ლოკალურ არქივში დაემატა (დღიური არ წაიშალა). Firebase სინქი მოგვიანებით შეგვიძლია გავამაგროთ.");
   }
@@ -3569,8 +3696,17 @@ document.getElementById("expandAll").addEventListener("click", () => {
   document.addEventListener("input", (ev) => {
     const t = ev.target;
     if(!t) return;
+    if(t.classList?.contains("invalid-field")){
+      t.classList.remove("invalid-field");
+    }
     if(t.id === "q") return;
     scheduleFirestoreSync();
+  });
+  document.addEventListener("change", (ev) => {
+    const t = ev.target;
+    if(t?.classList?.contains("invalid-field")){
+      t.classList.remove("invalid-field");
+    }
   });
   document.addEventListener("change", () => {
     scheduleFirestoreSync();

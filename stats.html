@@ -1,0 +1,1371 @@
+<!DOCTYPE html>
+<html lang="ka">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>ER ორდერ-სეტი — სტატისტიკა</title>
+  <link href="erchecklist.png" rel="icon" sizes="32x32" type="image/png"/>
+  <link href="erchecklist.png" rel="shortcut icon" type="image/png"/>
+  <link href="erchecklist.png" rel="apple-touch-icon"/>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <style>
+    :root{
+      --bg:#eef8f6;
+      --card:rgba(255,255,255,.78);
+      --card-strong:#ffffff;
+      --line:rgba(15,23,42,.08);
+      --text:#132033;
+      --muted:#5f6f87;
+      --navy:#20324f;
+      --blue:#3b82f6;
+      --blue-soft:#cfe5ff;
+      --mint:#bcf2de;
+      --mint-deep:#59c9a5;
+      --violet:#8b5cf6;
+      --orange:#f97316;
+      --shadow:0 24px 60px rgba(25, 48, 82, .12);
+      --glow:0 0 0 1px rgba(255,255,255,.5), 0 18px 50px rgba(76, 157, 255, .16);
+    }
+    *{box-sizing:border-box}
+    html, body{margin:0; min-height:100%}
+    body{
+      font-family:Calibri,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+      color:var(--text);
+      background:
+        radial-gradient(circle at 15% 20%, rgba(174, 238, 228, .95), transparent 28%),
+        radial-gradient(circle at 85% 15%, rgba(207, 229, 255, .92), transparent 24%),
+        radial-gradient(circle at 80% 85%, rgba(242, 225, 177, .72), transparent 26%),
+        linear-gradient(135deg, #f6fbff 0%, #edf7f3 56%, #f4f7fb 100%);
+      overflow-x:hidden;
+    }
+    body::before,
+    body::after{
+      content:"";
+      position:fixed;
+      inset:auto;
+      width:34vw;
+      height:34vw;
+      border-radius:50%;
+      filter:blur(44px);
+      opacity:.28;
+      pointer-events:none;
+      z-index:0;
+    }
+    body::before{
+      top:-10vw;
+      right:-8vw;
+      background:rgba(98, 187, 255, .35);
+    }
+    body::after{
+      bottom:-12vw;
+      left:-10vw;
+      background:rgba(115, 240, 194, .30);
+    }
+    a{color:inherit}
+    .hidden{display:none !important}
+    .gate{
+      min-height:100vh;
+      display:grid;
+      place-items:center;
+      padding:28px;
+      position:relative;
+      z-index:2;
+    }
+    .gate-card{
+      width:min(460px, 100%);
+      background:rgba(255,255,255,.82);
+      border:1px solid rgba(255,255,255,.7);
+      border-radius:32px;
+      padding:30px;
+      box-shadow:var(--shadow);
+      backdrop-filter:blur(18px);
+    }
+    .gate-badge{
+      display:inline-flex;
+      align-items:center;
+      gap:10px;
+      padding:10px 14px;
+      border-radius:999px;
+      background:#ffffff;
+      border:1px solid var(--line);
+      color:var(--muted);
+      font-size:12px;
+      font-weight:700;
+      letter-spacing:.06em;
+      text-transform:uppercase;
+    }
+    .gate h1{
+      margin:18px 0 10px;
+      font-size:34px;
+      line-height:1.04;
+      letter-spacing:-.03em;
+    }
+    .gate p{
+      margin:0 0 20px;
+      color:var(--muted);
+      line-height:1.55;
+      font-size:15px;
+    }
+    .gate-form{
+      display:grid;
+      gap:12px;
+    }
+    .gate-form input{
+      width:100%;
+      border:1px solid rgba(15,23,42,.10);
+      border-radius:18px;
+      padding:14px 16px;
+      font-size:15px;
+      background:#ffffff;
+      outline:none;
+      color:var(--text);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.9);
+    }
+    .gate-form input:focus{
+      border-color:rgba(59,130,246,.45);
+      box-shadow:0 0 0 4px rgba(59,130,246,.12);
+    }
+    .gate-form button{
+      border:0;
+      border-radius:18px;
+      padding:14px 18px;
+      font-size:15px;
+      font-weight:700;
+      cursor:pointer;
+      color:#fff;
+      background:linear-gradient(135deg, #23395d 0%, #3b82f6 100%);
+      box-shadow:0 18px 38px rgba(37,99,235,.22);
+    }
+    .gate-error{
+      min-height:20px;
+      font-size:13px;
+      color:#dc2626;
+      font-weight:700;
+    }
+    .app-shell{
+      position:relative;
+      z-index:2;
+      width:min(1600px, calc(100vw - 24px));
+      margin:12px auto;
+      padding:8px;
+      display:grid;
+      grid-template-columns:260px minmax(0, 1fr);
+      gap:18px;
+    }
+    .sidebar,
+    .panel,
+    .topbar{
+      background:var(--card);
+      border:1px solid rgba(255,255,255,.65);
+      box-shadow:var(--glow);
+      backdrop-filter:blur(18px);
+    }
+    .sidebar{
+      border-radius:34px;
+      padding:26px 20px;
+      display:flex;
+      flex-direction:column;
+      gap:22px;
+      min-height:calc(100vh - 24px);
+      position:sticky;
+      top:12px;
+    }
+    .brand{
+      padding:8px 8px 4px;
+    }
+    .brand-mark{
+      width:56px;
+      height:56px;
+      border-radius:20px;
+      display:grid;
+      place-items:center;
+      background:linear-gradient(145deg, #ffffff 0%, #dcecff 100%);
+      box-shadow:0 12px 28px rgba(82, 131, 214, .20);
+      font-size:26px;
+    }
+    .brand h2{
+      margin:14px 0 2px;
+      font-size:30px;
+      letter-spacing:-.04em;
+    }
+    .brand p{
+      margin:0;
+      color:var(--muted);
+      font-size:13px;
+      line-height:1.5;
+    }
+    .nav{
+      display:grid;
+      gap:10px;
+    }
+    .nav-item{
+      border:0;
+      border-radius:22px;
+      padding:16px 18px;
+      text-align:left;
+      color:var(--muted);
+      background:transparent;
+      font-size:15px;
+      font-weight:700;
+    }
+    .nav-item.active{
+      background:linear-gradient(135deg, #1f3b67 0%, #2c7ef8 100%);
+      color:#fff;
+      box-shadow:0 16px 30px rgba(37,99,235,.24);
+    }
+    .scope-card{
+      margin-top:auto;
+      padding:20px;
+      border-radius:26px;
+      background:linear-gradient(180deg, rgba(255,255,255,.94) 0%, rgba(237, 246, 255, .92) 100%);
+      border:1px solid rgba(15,23,42,.06);
+    }
+    .scope-card h3{
+      margin:0 0 10px;
+      font-size:16px;
+    }
+    .scope-card p{
+      margin:0 0 8px;
+      font-size:13px;
+      color:var(--muted);
+      line-height:1.5;
+    }
+    .scope-pill{
+      display:inline-flex;
+      margin-top:8px;
+      border-radius:999px;
+      padding:8px 12px;
+      background:#fff;
+      border:1px solid var(--line);
+      font-size:12px;
+      font-weight:700;
+      color:#24446d;
+    }
+    .main{
+      display:grid;
+      gap:18px;
+      align-content:start;
+    }
+    .topbar{
+      border-radius:999px;
+      padding:12px 16px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+    }
+    .search-pill{
+      flex:1;
+      min-width:220px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      border-radius:999px;
+      padding:12px 16px;
+      background:rgba(255,255,255,.92);
+      border:1px solid rgba(15,23,42,.06);
+      color:var(--muted);
+      font-size:14px;
+      font-weight:700;
+    }
+    .top-actions{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+      justify-content:flex-end;
+    }
+    .top-link{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      text-decoration:none;
+      border-radius:999px;
+      padding:11px 16px;
+      background:#fff;
+      border:1px solid rgba(15,23,42,.08);
+      color:#25466e;
+      font-size:13px;
+      font-weight:700;
+      box-shadow:0 10px 24px rgba(31, 59, 103, .08);
+    }
+    .hero{
+      display:flex;
+      flex-wrap:wrap;
+      align-items:flex-end;
+      justify-content:space-between;
+      gap:18px;
+      padding:8px 4px;
+    }
+    .hero h1{
+      margin:0 0 8px;
+      font-size:52px;
+      line-height:.98;
+      letter-spacing:-.05em;
+    }
+    .hero p{
+      margin:0;
+      color:var(--muted);
+      font-size:15px;
+      line-height:1.55;
+      max-width:760px;
+    }
+    .filters{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+    }
+    .filter-card{
+      min-width:210px;
+      padding:8px 10px;
+      border-radius:22px;
+      background:rgba(255,255,255,.78);
+      border:1px solid rgba(255,255,255,.74);
+      box-shadow:0 14px 28px rgba(37,99,235,.10);
+    }
+    .filter-label{
+      display:block;
+      margin:0 0 6px;
+      color:var(--muted);
+      font-size:11px;
+      font-weight:800;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+    }
+    .filter-card select{
+      width:100%;
+      border:0;
+      outline:none;
+      background:transparent;
+      color:var(--text);
+      font-size:14px;
+      font-weight:700;
+      padding:2px 0 4px;
+    }
+    .metrics{
+      display:grid;
+      grid-template-columns:repeat(4, minmax(0, 1fr));
+      gap:16px;
+    }
+    .metric-card{
+      min-height:148px;
+      border-radius:28px;
+      padding:20px;
+      background:var(--card);
+      border:1px solid rgba(255,255,255,.65);
+      box-shadow:var(--glow);
+      backdrop-filter:blur(18px);
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .metric-card .metric-tag{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      font-size:12px;
+      color:var(--muted);
+      font-weight:800;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+    }
+    .metric-card .metric-value{
+      font-size:42px;
+      line-height:1;
+      letter-spacing:-.05em;
+      font-weight:900;
+    }
+    .metric-card .metric-meta{
+      color:var(--muted);
+      font-size:13px;
+      line-height:1.5;
+    }
+    .dashboard-grid{
+      display:grid;
+      grid-template-columns:1.2fr 1.2fr .9fr;
+      gap:18px;
+      align-items:start;
+    }
+    .panel{
+      border-radius:34px;
+      padding:24px;
+    }
+    .panel h3{
+      margin:0 0 6px;
+      font-size:26px;
+      letter-spacing:-.03em;
+    }
+    .panel-sub{
+      margin:0 0 18px;
+      color:var(--muted);
+      font-size:14px;
+      line-height:1.5;
+    }
+    .panel-lg{grid-column:span 2}
+    .panel-sm{grid-column:span 1}
+    .panel-wide{grid-column:span 3}
+    .chart-bars{
+      height:280px;
+      display:grid;
+      grid-template-columns:repeat(var(--cols), minmax(0, 1fr));
+      gap:12px;
+      align-items:end;
+      padding-top:16px;
+    }
+    .chart-bar{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:10px;
+    }
+    .chart-bar-track{
+      width:100%;
+      height:220px;
+      border-radius:26px;
+      display:flex;
+      align-items:flex-end;
+      padding:0 10px 10px;
+      background:linear-gradient(180deg, rgba(255,255,255,.56) 0%, rgba(217, 235, 255, .42) 100%);
+      border:1px solid rgba(255,255,255,.8);
+    }
+    .chart-bar-fill{
+      width:100%;
+      border-radius:18px 18px 12px 12px;
+      background:linear-gradient(180deg, #d6ebff 0%, #6d7f98 100%);
+      box-shadow:0 16px 30px rgba(53, 99, 176, .18);
+      min-height:14px;
+      transition:height .2s ease;
+    }
+    .chart-bar.is-selected .chart-bar-fill{
+      background:linear-gradient(180deg, #b9f6e1 0%, #2f7ef7 100%);
+    }
+    .chart-bar-label{
+      font-size:11px;
+      font-weight:800;
+      letter-spacing:.08em;
+      color:var(--muted);
+      text-transform:uppercase;
+    }
+    .chart-bar-value{
+      font-size:12px;
+      font-weight:800;
+      color:var(--text);
+    }
+    .insight-list,
+    .ranking-list,
+    .legend-list{
+      display:grid;
+      gap:12px;
+    }
+    .insight-item,
+    .ranking-item,
+    .table-row{
+      border-radius:22px;
+      background:rgba(255,255,255,.72);
+      border:1px solid rgba(255,255,255,.76);
+      box-shadow:0 10px 24px rgba(37,99,235,.08);
+    }
+    .insight-item{
+      padding:14px 16px;
+      font-size:14px;
+      line-height:1.55;
+      color:#294160;
+    }
+    .ranking-item{
+      padding:14px 16px;
+      display:grid;
+      grid-template-columns:auto 1fr auto;
+      align-items:center;
+      gap:12px;
+    }
+    .rank-badge{
+      width:36px;
+      height:36px;
+      border-radius:14px;
+      display:grid;
+      place-items:center;
+      background:linear-gradient(180deg, #ffffff 0%, #dbe8fb 100%);
+      color:#24446d;
+      font-weight:900;
+      font-size:14px;
+    }
+    .ranking-title{
+      font-size:14px;
+      font-weight:800;
+    }
+    .ranking-sub{
+      font-size:12px;
+      color:var(--muted);
+      margin-top:4px;
+    }
+    .ranking-value{
+      font-size:22px;
+      font-weight:900;
+      letter-spacing:-.04em;
+      color:#18365c;
+    }
+    .donut-wrap{
+      display:grid;
+      gap:16px;
+      align-items:center;
+      justify-items:center;
+    }
+    .donut{
+      width:220px;
+      height:220px;
+      border-radius:50%;
+      position:relative;
+      box-shadow:inset 0 0 0 18px rgba(255,255,255,.55), 0 20px 34px rgba(37,99,235,.12);
+    }
+    .donut::after{
+      content:"";
+      position:absolute;
+      inset:34px;
+      border-radius:50%;
+      background:rgba(255,255,255,.90);
+      border:1px solid rgba(255,255,255,.74);
+      box-shadow:inset 0 2px 8px rgba(186, 211, 241, .35);
+    }
+    .donut-center{
+      position:absolute;
+      inset:0;
+      z-index:2;
+      display:grid;
+      place-items:center;
+      text-align:center;
+      padding:0 46px;
+    }
+    .donut-center strong{
+      display:block;
+      font-size:38px;
+      line-height:1;
+      letter-spacing:-.05em;
+    }
+    .donut-center span{
+      display:block;
+      margin-top:8px;
+      color:var(--muted);
+      font-size:12px;
+      font-weight:800;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+    }
+    .legend-item{
+      display:grid;
+      grid-template-columns:auto 1fr auto;
+      gap:10px;
+      align-items:center;
+      width:min(100%, 360px);
+      font-size:14px;
+    }
+    .legend-dot{
+      width:12px;
+      height:12px;
+      border-radius:50%;
+    }
+    .table{
+      display:grid;
+      gap:10px;
+    }
+    .table-head,
+    .table-row{
+      display:grid;
+      grid-template-columns:1.6fr .55fr 1fr 1fr;
+      gap:12px;
+      align-items:center;
+    }
+    .table-head{
+      padding:0 10px 6px;
+      color:var(--muted);
+      font-size:11px;
+      font-weight:800;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+    }
+    .table-row{
+      padding:14px 16px;
+      font-size:14px;
+    }
+    .table-row strong{
+      display:block;
+      font-size:14px;
+    }
+    .table-row span{
+      display:block;
+      margin-top:4px;
+      color:var(--muted);
+      font-size:12px;
+    }
+    .empty-card,
+    .loading-card{
+      padding:28px;
+      border-radius:28px;
+      background:rgba(255,255,255,.78);
+      border:1px solid rgba(255,255,255,.65);
+      box-shadow:var(--glow);
+      color:var(--muted);
+      line-height:1.6;
+      font-size:15px;
+    }
+    .loading-card{
+      display:flex;
+      align-items:center;
+      gap:14px;
+      color:#23446d;
+      font-weight:700;
+    }
+    .spinner{
+      width:18px;
+      height:18px;
+      border-radius:50%;
+      border:2px solid rgba(35,68,109,.14);
+      border-top-color:#2f7ef7;
+      animation:spin .8s linear infinite;
+    }
+    .accent-chip{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:10px 12px;
+      border-radius:999px;
+      background:#fff;
+      border:1px solid var(--line);
+      font-size:12px;
+      font-weight:800;
+      color:#23446d;
+    }
+    .leaders-grid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:16px;
+    }
+    .leaders-block{
+      padding:18px;
+      border-radius:24px;
+      background:rgba(255,255,255,.76);
+      border:1px solid rgba(255,255,255,.75);
+      box-shadow:0 10px 24px rgba(37,99,235,.08);
+    }
+    .leaders-block h4{
+      margin:0 0 12px;
+      font-size:18px;
+    }
+    .leaders-empty{
+      color:var(--muted);
+      font-size:14px;
+      line-height:1.55;
+    }
+    @keyframes spin{
+      to{ transform:rotate(360deg); }
+    }
+    @media (max-width: 1280px){
+      .metrics{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
+      .dashboard-grid{ grid-template-columns:1fr 1fr; }
+      .panel-lg,
+      .panel-wide{ grid-column:span 2; }
+    }
+    @media (max-width: 980px){
+      .app-shell{
+        grid-template-columns:1fr;
+      }
+      .sidebar{
+        min-height:auto;
+        position:relative;
+        top:auto;
+      }
+      .hero h1{
+        font-size:38px;
+      }
+      .topbar{
+        border-radius:28px;
+        flex-direction:column;
+        align-items:stretch;
+      }
+      .dashboard-grid,
+      .metrics,
+      .leaders-grid{
+        grid-template-columns:1fr;
+      }
+      .panel-lg,
+      .panel-wide,
+      .panel-sm{
+        grid-column:span 1;
+      }
+      .table-head,
+      .table-row{
+        grid-template-columns:1fr;
+      }
+      .table-head{
+        display:none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="gate" id="loginGate">
+    <div class="gate-card">
+      <div class="gate-badge">ER Analytics</div>
+      <h1>სტატისტიკის პანელი</h1>
+      <p>აქ ნახავ არქივიდან ამოღებულ დეტალურ სტატისტიკას თვეების, ექიმების, განყოფილებების და კონკრეტული კვლევების მიხედვით.</p>
+      <form class="gate-form" id="loginForm">
+        <input autocomplete="current-password" id="statsPassword" placeholder="შეიყვანე პაროლი" type="password"/>
+        <button type="submit">შესვლა</button>
+        <div class="gate-error" id="loginError"></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="app-shell hidden" id="statsApp">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">⌁</div>
+        <h2>ER Stats</h2>
+        <p>გაფილტრული ანალიტიკა არქივში შენახული კვლევების მიხედვით. გვერდი ცალკეა, რომ ორდერ-სეტის ჩატვირთვა არ დაამძიმოს.</p>
+      </div>
+
+      <div class="nav">
+        <button class="nav-item active" type="button">Overview</button>
+        <button class="nav-item" type="button">Doctors</button>
+        <button class="nav-item" type="button">Departments</button>
+        <button class="nav-item" type="button">Monthly Stats</button>
+      </div>
+
+      <div class="scope-card">
+        <h3>აქტიური სკოპი</h3>
+        <p id="scopeSummary">იტვირთება...</p>
+        <div class="scope-pill" id="scopePill">scope</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="search-pill">☰ დეტალური სტატისტიკა ექიმების, კვლევებისა და თვეების მიხედვით</div>
+        <div class="top-actions">
+          <a class="top-link" href="./index.html" id="statsToChecklist" target="_blank" rel="noopener noreferrer">ორდერ სეტი</a>
+          <a class="top-link" href="./archive.html" id="statsToArchive" target="_blank" rel="noopener noreferrer">არქივი</a>
+        </div>
+      </div>
+
+      <section class="hero">
+        <div>
+          <div class="accent-chip" id="statsDateChip">სტატისტიკა</div>
+          <h1>ER Analytics Dashboard</h1>
+          <p>თვიური ფილტრით შეგიძლია ნახო ყველაზე აქტიური ექიმები, ყველაზე ხშირად დანიშნული კვლევები, CT/კტ ლიდერები, განყოფილებების დატვირთვა და კონკრეტული კვლევის დეტალური გამანაწილებელი სურათი.</p>
+        </div>
+        <div class="filters">
+          <div class="filter-card">
+            <label class="filter-label" for="monthFilter">პერიოდი</label>
+            <select id="monthFilter"></select>
+          </div>
+          <div class="filter-card">
+            <label class="filter-label" for="testFilter">კონკრეტული კვლევა</label>
+            <select id="testFilter"></select>
+          </div>
+        </div>
+      </section>
+
+      <div id="statsStatus"></div>
+      <section class="metrics" id="metricsGrid"></section>
+
+      <section class="dashboard-grid hidden" id="dashboardGrid">
+        <article class="panel panel-lg">
+          <h3>თვიური ტენდენცია</h3>
+          <p class="panel-sub">თვეების მიხედვით რამდენი კვლევა დაემატა არქივში. არჩეული თვე მონიშნულია გამოკვეთილად.</p>
+          <div id="monthlyTrend"></div>
+        </article>
+
+        <article class="panel panel-sm">
+          <h3>მოკლე დასკვნა</h3>
+          <p class="panel-sub">ყველაზე მნიშვნელოვანი სწრაფი წაკითხვა ერთი ფანჯრიდან.</p>
+          <div class="insight-list" id="summaryInsights"></div>
+        </article>
+
+        <article class="panel panel-lg">
+          <h3>კვლევების ლიდერბორდი</h3>
+          <p class="panel-sub">რომელი კვლევა დაინიშნა ყველაზე მეტად და ვის/რომელი განყოფილების ხელში გროვდება ყველაზე დიდი მოცულობა.</p>
+          <div id="topTestsTable"></div>
+        </article>
+
+        <article class="panel panel-sm">
+          <h3>განყოფილებების განაწილება</h3>
+          <p class="panel-sub">შეკვეთებში ყველაზე აქტიური სპეციალობები/განყოფილებები.</p>
+          <div id="departmentSplit"></div>
+        </article>
+
+        <article class="panel panel-sm">
+          <h3>ექიმების ლიდერბორდი</h3>
+          <p class="panel-sub">ყველაზე მეტი დანიშნული კვლევის მქონე ექიმები.</p>
+          <div class="ranking-list" id="doctorRanking"></div>
+        </article>
+
+        <article class="panel panel-sm">
+          <h3>CT / კტ ლიდერები</h3>
+          <p class="panel-sub">კომპიუტერული ტომოგრაფიისა და CT ტიპის კვლევების აქტიური შემკვეთები.</p>
+          <div class="ranking-list" id="ctRanking"></div>
+        </article>
+
+        <article class="panel panel-wide">
+          <h3>კონკრეტული კვლევის დეტალური ლიდერები</h3>
+          <p class="panel-sub">არჩეული კვლევისთვის ვინ ნიშნავს ყველაზე ხშირად და რომელ სპეციალობაში გროვდება ძირითადი მოცულობა.</p>
+          <div id="selectedTestLeaders"></div>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const PASSWORD = "admin1";
+    const monthNamesKa = ["იანვარი","თებერვალი","მარტი","აპრილი","მაისი","ივნისი","ივლისი","აგვისტო","სექტემბერი","ოქტომბერი","ნოემბერი","დეკემბერი"];
+    const palette = ["#2f7ef7", "#7fb8ff", "#7ce3bd", "#8b5cf6", "#f97316", "#1f3b67", "#96f2d7"];
+    const urlParams = new URLSearchParams(window.location.search);
+    const ROOM_KEY = (urlParams.get("room") || "").trim();
+    const SHARED_DATA_SCOPE = ROOM_KEY || "global";
+    const firebaseConfig = window.ED_FIREBASE_CONFIG || {
+      apiKey: "AIzaSyDImJ5LcB6ljpqx0t7koLGvpPmWJTxfFzE",
+      authDomain: "ercheck-991c0.firebaseapp.com",
+      projectId: "ercheck-991c0",
+      storageBucket: "ercheck-991c0.firebasestorage.app",
+      messagingSenderId: "252942351374",
+      appId: "1:252942351374:web:8b3561d2e7ed61ae26105f",
+      measurementId: "G-ZSKPNFMVMM"
+    };
+    const state = {
+      docs: [],
+      entries: [],
+      tests: [],
+      months: [],
+      selectedMonth: "all",
+      selectedTest: ""
+    };
+
+    function escapeHTML(value){
+      return String(value ?? "").replace(/[&<>"']/g, ch => ({
+        "&":"&amp;",
+        "<":"&lt;",
+        ">":"&gt;",
+        "\"":"&quot;",
+        "'":"&#39;"
+      }[ch]));
+    }
+    function norm(value){
+      return String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+    }
+    function uniq(values){
+      return [...new Set(values.filter(Boolean))];
+    }
+    function buildSiblingUrl(basePath){
+      const params = new URLSearchParams(window.location.search);
+      params.delete("view");
+      params.delete("editDate");
+      params.delete("editEntry");
+      const query = params.toString();
+      return `${basePath}${query ? "?" + query : ""}`;
+    }
+    function monthLabel(monthKey){
+      if(!monthKey || monthKey === "all") return "ყველა თვე";
+      const [year, month] = monthKey.split("-");
+      const monthIndex = Number(month) - 1;
+      return `${monthNamesKa[monthIndex] || month} ${year}`;
+    }
+    function safeDoctor(name){
+      const cleaned = String(name || "").trim();
+      return cleaned || "უცნობი ექიმი";
+    }
+    function safeSpecialty(name){
+      const cleaned = String(name || "").trim();
+      return cleaned || "უცნობი სპეციალობა";
+    }
+    function normalizeTestName(text){
+      return String(text || "")
+        .replace(/^სხვა:\s*/i, "")
+        .replace(/\s+/g, " ")
+        .trim() || "უცნობი კვლევა";
+    }
+    function isCtLike(text){
+      const value = norm(text);
+      return /\bct\b/.test(value) || value.includes("კტ") || value.includes("კომპიუტერული ტომოგრაფ");
+    }
+    function sum(items, key){
+      return items.reduce((acc, item) => acc + Number(item?.[key] || 0), 0);
+    }
+    function countBy(list, getter){
+      const map = new Map();
+      list.forEach(item => {
+        const key = getter(item);
+        if(!key) return;
+        map.set(key, (map.get(key) || 0) + 1);
+      });
+      return map;
+    }
+    function topFromMap(map, limit = 10){
+      return [...map.entries()]
+        .map(([label, count]) => ({ label, count }))
+        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "ka"))
+        .slice(0, limit);
+    }
+    function topLeader(rows, keyFn, fallbackLabel){
+      const items = topFromMap(countBy(rows, keyFn), 1);
+      return items[0] || { label: fallbackLabel, count: 0 };
+    }
+    function renderStatus(message, loading){
+      const el = document.getElementById("statsStatus");
+      if(!el) return;
+      if(!message){
+        el.innerHTML = "";
+        return;
+      }
+      el.innerHTML = loading
+        ? `<div class="loading-card"><span class="spinner"></span><span>${escapeHTML(message)}</span></div>`
+        : `<div class="empty-card">${escapeHTML(message)}</div>`;
+    }
+    function renderMetricCards(metrics){
+      const grid = document.getElementById("metricsGrid");
+      grid.innerHTML = metrics.map(metric => `
+        <article class="metric-card">
+          <div class="metric-tag">${escapeHTML(metric.tag)}</div>
+          <div class="metric-value">${escapeHTML(metric.value)}</div>
+          <div class="metric-meta">${escapeHTML(metric.meta)}</div>
+        </article>
+      `).join("");
+    }
+    function renderColumnChart(items, selectedMonth){
+      if(!items.length){
+        return `<div class="empty-card">ამ ეტაპზე თვიური დიაგრამისთვის საკმარისი არქივი არ არის.</div>`;
+      }
+      const max = Math.max(...items.map(item => item.count), 1);
+      return `
+        <div class="chart-bars" style="--cols:${items.length};">
+          ${items.map(item => {
+            const height = Math.max(14, Math.round((item.count / max) * 100));
+            const selected = selectedMonth !== "all" && item.month === selectedMonth;
+            return `
+              <div class="chart-bar ${selected ? "is-selected" : ""}">
+                <div class="chart-bar-track">
+                  <div class="chart-bar-fill" style="height:${height}%;"></div>
+                </div>
+                <div class="chart-bar-value">${item.count}</div>
+                <div class="chart-bar-label">${escapeHTML(item.shortLabel)}</div>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      `;
+    }
+    function renderRankingList(targetId, items, emptyText){
+      const el = document.getElementById(targetId);
+      if(!el) return;
+      if(!items.length){
+        el.innerHTML = `<div class="empty-card">${escapeHTML(emptyText)}</div>`;
+        return;
+      }
+      el.innerHTML = items.map((item, index) => `
+        <div class="ranking-item">
+          <div class="rank-badge">${index + 1}</div>
+          <div>
+            <div class="ranking-title">${escapeHTML(item.label)}</div>
+            <div class="ranking-sub">${escapeHTML(item.sub || "დანიშნული კვლევები")}</div>
+          </div>
+          <div class="ranking-value">${item.count}</div>
+        </div>
+      `).join("");
+    }
+    function buildDonutMarkup(items, title){
+      if(!items.length){
+        return `<div class="empty-card">ამ ფილტრში განყოფილების მონაცემი ჯერ არ არის.</div>`;
+      }
+      const topItems = items.slice(0, 5);
+      const total = sum(topItems, "count") || 1;
+      let cursor = 0;
+      const gradientStops = topItems.map((item, index) => {
+        const share = (item.count / total) * 100;
+        const next = cursor + share;
+        const color = palette[index % palette.length];
+        const stop = `${color} ${cursor.toFixed(2)}% ${next.toFixed(2)}%`;
+        cursor = next;
+        return stop;
+      }).join(", ");
+      const leader = topItems[0];
+      return `
+        <div class="donut-wrap">
+          <div class="donut" style="background:conic-gradient(${gradientStops});">
+            <div class="donut-center">
+              <div>
+                <strong>${leader.count}</strong>
+                <span>${escapeHTML(leader.label)}</span>
+              </div>
+            </div>
+          </div>
+          <div class="legend-list">
+            ${topItems.map((item, index) => `
+              <div class="legend-item">
+                <span class="legend-dot" style="background:${palette[index % palette.length]};"></span>
+                <span>${escapeHTML(item.label)}</span>
+                <strong>${item.count}</strong>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    }
+    function renderTopTestsTable(rows){
+      const el = document.getElementById("topTestsTable");
+      if(!el) return;
+      if(!rows.length){
+        el.innerHTML = `<div class="empty-card">ამ ფილტრში კვლევების ცხრილი ჯერ არ არის.</div>`;
+        return;
+      }
+      el.innerHTML = `
+        <div class="table">
+          <div class="table-head">
+            <div>კვლევა</div>
+            <div>სულ</div>
+            <div>ლიდერი ექიმი</div>
+            <div>ლიდერი განყოფილება</div>
+          </div>
+          ${rows.map(row => `
+            <div class="table-row">
+              <div>
+                <strong>${escapeHTML(row.testName)}</strong>
+                <span>${escapeHTML(row.meta)}</span>
+              </div>
+              <div><strong>${row.total}</strong></div>
+              <div>
+                <strong>${escapeHTML(row.topDoctor.label)}</strong>
+                <span>${row.topDoctor.count} დანიშვნა</span>
+              </div>
+              <div>
+                <strong>${escapeHTML(row.topSpecialty.label)}</strong>
+                <span>${row.topSpecialty.count} დანიშვნა</span>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+    function renderSelectedTestLeaders(testName, testRows){
+      const el = document.getElementById("selectedTestLeaders");
+      if(!el) return;
+      if(!(testName && testRows.length)){
+        el.innerHTML = `<div class="empty-card">აირჩიე თვე ან კვლევა, რომ კონკრეტული ლიდერები გამოჩნდეს.</div>`;
+        return;
+      }
+
+      const doctorLeaders = topFromMap(countBy(testRows.filter(row => row.doctorKnown), row => row.doctor), 5);
+      const specialtyLeaders = topFromMap(countBy(testRows.filter(row => row.specialtyKnown), row => row.specialty), 5);
+      const monthLeaders = topFromMap(countBy(testRows, row => row.monthLabel), 6);
+
+      el.innerHTML = `
+        <div class="leaders-grid">
+          <div class="leaders-block">
+            <h4>${escapeHTML(testName)} — ექიმები</h4>
+            ${doctorLeaders.length ? `
+              <div class="ranking-list">
+                ${doctorLeaders.map((item, index) => `
+                  <div class="ranking-item">
+                    <div class="rank-badge">${index + 1}</div>
+                    <div>
+                      <div class="ranking-title">${escapeHTML(item.label)}</div>
+                      <div class="ranking-sub">ამ კონკრეტული კვლევის შემკვეთი</div>
+                    </div>
+                    <div class="ranking-value">${item.count}</div>
+                  </div>
+                `).join("")}
+              </div>
+            ` : `<div class="leaders-empty">ამ კვლევაზე ექიმის სახელი არ არის დაფიქსირებული.</div>`}
+          </div>
+          <div class="leaders-block">
+            <h4>${escapeHTML(testName)} — სპეციალობები</h4>
+            ${specialtyLeaders.length ? `
+              <div class="ranking-list">
+                ${specialtyLeaders.map((item, index) => `
+                  <div class="ranking-item">
+                    <div class="rank-badge">${index + 1}</div>
+                    <div>
+                      <div class="ranking-title">${escapeHTML(item.label)}</div>
+                      <div class="ranking-sub">რომელ განყოფილებაში გროვდება კვლევა</div>
+                    </div>
+                    <div class="ranking-value">${item.count}</div>
+                  </div>
+                `).join("")}
+              </div>
+            ` : `<div class="leaders-empty">ამ კვლევაზე სპეციალობა არ არის დაფიქსირებული.</div>`}
+          </div>
+        </div>
+        <div class="leaders-block" style="margin-top:16px;">
+          <h4>${escapeHTML(testName)} — თვიური სურათი</h4>
+          ${monthLeaders.length ? `
+            <div class="ranking-list">
+              ${monthLeaders.map((item, index) => `
+                <div class="ranking-item">
+                  <div class="rank-badge">${index + 1}</div>
+                  <div>
+                    <div class="ranking-title">${escapeHTML(item.label)}</div>
+                    <div class="ranking-sub">ამ კვლევის შესრულებული რაოდენობა თვეში</div>
+                  </div>
+                  <div class="ranking-value">${item.count}</div>
+                </div>
+              `).join("")}
+            </div>
+          ` : `<div class="leaders-empty">ამ კვლევაზე თვიური მონაცემი საკმარისი არ არის.</div>`}
+        </div>
+      `;
+    }
+    function flattenArchiveDocs(docs){
+      const entries = [];
+      const tests = [];
+      docs.forEach(doc => {
+        const date = String(doc.date || "").trim();
+        const month = /^\d{4}-\d{2}/.test(date) ? date.slice(0, 7) : "";
+        const monthDisplay = monthLabel(month);
+        (doc.entries || []).forEach((entry, entryIndex) => {
+          const patientName = String(entry?.pt?.name || "").trim() || "უცნობი პაციენტი";
+          const recordId = entry?.id || `${date}_${entryIndex}`;
+          const normalizedEntry = {
+            id: recordId,
+            date,
+            month,
+            monthLabel: monthDisplay,
+            patientName,
+            erDutyDoctor: String(doc.erDutyDoctor || "").trim()
+          };
+          entries.push(normalizedEntry);
+
+          (entry?.tests || []).forEach((test, testIndex) => {
+            const normalizedText = normalizeTestName(test?.text || "");
+            const doctor = safeDoctor(test?.ordererName);
+            const specialty = safeSpecialty(test?.ordererSpec);
+            tests.push({
+              id: `${recordId}_${testIndex}`,
+              entryId: recordId,
+              date,
+              month,
+              monthLabel: monthDisplay,
+              patientName,
+              erDutyDoctor: normalizedEntry.erDutyDoctor,
+              testName: normalizedText,
+              rawText: String(test?.text || ""),
+              doctor,
+              doctorKnown: doctor !== "უცნობი ექიმი",
+              specialty,
+              specialtyKnown: specialty !== "უცნობი სპეციალობა",
+              orderTime: String(test?.orderTime || ""),
+              essential: !!test?.essential,
+              optional: !!test?.optional,
+              custom: !!test?.custom,
+              groupType: String(test?.groupType || ""),
+              isCt: isCtLike(normalizedText)
+            });
+          });
+        });
+      });
+      return { entries, tests };
+    }
+    function buildTestTableRows(rows){
+      const grouped = new Map();
+      rows.forEach(row => {
+        if(!grouped.has(row.testName)){
+          grouped.set(row.testName, []);
+        }
+        grouped.get(row.testName).push(row);
+      });
+      return [...grouped.entries()]
+        .map(([testName, testRows]) => ({
+          testName,
+          total: testRows.length,
+          topDoctor: topLeader(testRows.filter(row => row.doctorKnown), row => row.doctor, "მონაცემი არ არის"),
+          topSpecialty: topLeader(testRows.filter(row => row.specialtyKnown), row => row.specialty, "მონაცემი არ არის"),
+          meta: testRows.some(row => row.isCt) ? "CT / კტ ტიპის კვლევა" : (testRows.some(row => row.custom) ? "მომხმარებლის დამატებული კვლევა" : "სტანდარტული კვლევა")
+        }))
+        .sort((a, b) => b.total - a.total || a.testName.localeCompare(b.testName, "ka"))
+        .slice(0, 10);
+    }
+    function buildInsights(filteredDocs, filteredEntries, filteredTests, topTest, topDoctor, topCtDoctor, topSpecialty){
+      const insights = [];
+      insights.push(`არჩეულ ფილტრში არქივშია ${filteredDocs.length} დღე, ${filteredEntries.length} პაციენტის ჩანაწერი და ${filteredTests.length} კვლევა.`);
+      if(topTest.count){
+        insights.push(`ყველაზე ხშირი კვლევაა "${topTest.label}" — სულ ${topTest.count} დანიშვნა.`);
+      }
+      if(topDoctor.count){
+        insights.push(`კვლევების საერთო ლიდერი ექიმია ${topDoctor.label} — ${topDoctor.count} დაკვეთა.`);
+      }
+      if(topCtDoctor.count){
+        insights.push(`CT / კტ კვლევებში ყველაზე აქტიურია ${topCtDoctor.label} — ${topCtDoctor.count} დანიშვნა.`);
+      }
+      if(topSpecialty.count){
+        insights.push(`ყველაზე დატვირთული სპეციალობაა ${topSpecialty.label} — ${topSpecialty.count} კვლევა.`);
+      }
+      if(!filteredTests.length){
+        insights.push("ამ ფილტრში კვლევის მონაცემი ჯერ არ მოიძებნა.");
+      }
+      return insights.slice(0, 5);
+    }
+    function updateScopeLinks(){
+      const checklistLink = document.getElementById("statsToChecklist");
+      const archiveLink = document.getElementById("statsToArchive");
+      if(checklistLink) checklistLink.href = buildSiblingUrl("./index.html");
+      if(archiveLink) archiveLink.href = buildSiblingUrl("./archive.html");
+      const scopePill = document.getElementById("scopePill");
+      const scopeSummary = document.getElementById("scopeSummary");
+      if(scopePill) scopePill.textContent = `scope: ${SHARED_DATA_SCOPE}`;
+      if(scopeSummary){
+        scopeSummary.textContent = ROOM_KEY
+          ? `სტატისტიკა მუშაობს room=${ROOM_KEY} სკოპზე, ამიტომ ნაჩვენებია ამ ოთახის არქივი.`
+          : "სტატისტიკა მუშაობს global სკოპზე და ითვლის გლობალური არქივის ჩანაწერებს.";
+      }
+    }
+    function renderDashboard(){
+      const month = state.selectedMonth;
+      const filteredDocs = month === "all" ? state.docs : state.docs.filter(doc => doc.month === month);
+      const filteredEntries = month === "all" ? state.entries : state.entries.filter(entry => entry.month === month);
+      const filteredTests = month === "all" ? state.tests : state.tests.filter(test => test.month === month);
+      const knownDoctorRows = filteredTests.filter(test => test.doctorKnown);
+      const knownSpecialtyRows = filteredTests.filter(test => test.specialtyKnown);
+      const ctRows = filteredTests.filter(test => test.isCt && test.doctorKnown);
+
+      const topDoctors = topFromMap(countBy(knownDoctorRows, row => row.doctor), 8);
+      const topCtDoctors = topFromMap(countBy(ctRows, row => row.doctor), 8);
+      const topSpecialties = topFromMap(countBy(knownSpecialtyRows, row => row.specialty), 6);
+      const topTests = topFromMap(countBy(filteredTests, row => row.testName), 12);
+      const leaderTest = topTests[0] || { label:"მონაცემი არ არის", count:0 };
+      const leaderDoctor = topDoctors[0] || { label:"მონაცემი არ არის", count:0 };
+      const leaderCtDoctor = topCtDoctors[0] || { label:"მონაცემი არ არის", count:0 };
+      const leaderSpecialty = topSpecialties[0] || { label:"მონაცემი არ არის", count:0 };
+
+      document.getElementById("dashboardGrid").classList.toggle("hidden", !state.docs.length);
+      document.getElementById("statsDateChip").textContent = `პერიოდი: ${monthLabel(month)}`;
+
+      renderMetricCards([
+        { tag:"სულ კვლევები", value:String(filteredTests.length), meta:`${monthLabel(month)} პერიოდში დაფიქსირებული ყველა კვლევა.` },
+        { tag:"პაციენტები", value:String(filteredEntries.length), meta:`აღრიცხული პაციენტის ჩანაწერები ამავე ფილტრში.` },
+        { tag:"CT / კტ ლიდერი", value:leaderCtDoctor.count ? String(leaderCtDoctor.count) : "0", meta:leaderCtDoctor.count ? `${leaderCtDoctor.label} — ყველაზე მეტი CT დანიშვნა.` : "CT / კტ კვლევაზე ამ ფილტრში ჩანაწერი არ არის." },
+        { tag:"ლიდერი განყოფილება", value:leaderSpecialty.count ? String(leaderSpecialty.count) : "0", meta:leaderSpecialty.count ? `${leaderSpecialty.label} — ყველაზე აქტიური სპეციალობა.` : "სპეციალობის მონაცემი ჯერ არ არის." }
+      ]);
+
+      const trendData = state.months.slice().sort().map(monthKey => ({
+        month: monthKey,
+        shortLabel: monthNamesKa[Number(monthKey.slice(5, 7)) - 1]?.slice(0, 3) || monthKey.slice(5, 7),
+        count: state.tests.filter(test => test.month === monthKey).length
+      }));
+      document.getElementById("monthlyTrend").innerHTML = renderColumnChart(trendData, month);
+
+      const insights = buildInsights(filteredDocs, filteredEntries, filteredTests, leaderTest, leaderDoctor, leaderCtDoctor, leaderSpecialty);
+      document.getElementById("summaryInsights").innerHTML = insights.map(text => `<div class="insight-item">${escapeHTML(text)}</div>`).join("");
+
+      renderTopTestsTable(buildTestTableRows(filteredTests));
+      document.getElementById("departmentSplit").innerHTML = buildDonutMarkup(topSpecialties, "განყოფილებები");
+
+      renderRankingList(
+        "doctorRanking",
+        topDoctors.map(item => ({ ...item, sub:"ყველა დანიშნული კვლევა ამ ფილტრში" })),
+        "ამ ფილტრში ექიმის მიერ დანიშნული კვლევები ჯერ არ არის."
+      );
+      renderRankingList(
+        "ctRanking",
+        topCtDoctors.map(item => ({ ...item, sub:"CT / კტ ტიპის კვლევები" })),
+        "CT / კტ კვლევებზე ამ ფილტრში ექიმის ჩანაწერი არ არის."
+      );
+
+      const testFilter = document.getElementById("testFilter");
+      const selectableTests = uniq((filteredTests.length ? filteredTests : state.tests).map(test => test.testName)).sort((a, b) => a.localeCompare(b, "ka"));
+      if(!selectableTests.length){
+        state.selectedTest = "";
+      }else if(!selectableTests.includes(state.selectedTest)){
+        state.selectedTest = leaderTest.count ? leaderTest.label : selectableTests[0];
+      }
+      testFilter.innerHTML = selectableTests.length
+        ? selectableTests.map(name => `<option value="${escapeHTML(name)}"${name === state.selectedTest ? " selected" : ""}>${escapeHTML(name)}</option>`).join("")
+        : `<option value="">კვლევა არ არის</option>`;
+
+      const selectedRows = state.selectedTest
+        ? (filteredTests.length ? filteredTests : state.tests).filter(test => test.testName === state.selectedTest)
+        : [];
+      renderSelectedTestLeaders(state.selectedTest, selectedRows);
+    }
+    function populateMonthFilter(){
+      const monthFilter = document.getElementById("monthFilter");
+      const options = [`<option value="all">ყველა თვე</option>`]
+        .concat(state.months.slice().sort((a, b) => b.localeCompare(a)).map(month => `
+          <option value="${month}"${month === state.selectedMonth ? " selected" : ""}>${escapeHTML(monthLabel(month))}</option>
+        `));
+      monthFilter.innerHTML = options.join("");
+    }
+    async function fetchArchiveDocs(){
+      if(!window.firebase) throw new Error("Firebase სკრიპტი ვერ ჩაიტვირთა.");
+      if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+      const db = firebase.firestore();
+      const snap = await db.collection("ed_orderset_archive").where("scopeKey", "==", SHARED_DATA_SCOPE).get();
+      return snap.docs
+        .map(docSnap => {
+          const data = docSnap.data() || {};
+          const date = String(data.date || "").trim();
+          const month = /^\d{4}-\d{2}/.test(date) ? date.slice(0, 7) : "";
+          return {
+            id: docSnap.id,
+            date,
+            month,
+            erDutyDoctor: String(data.erDutyDoctor || "").trim(),
+            entries: Array.isArray(data.entries) ? data.entries : []
+          };
+        })
+        .filter(doc => doc.date)
+        .sort((a, b) => a.date.localeCompare(b.date));
+    }
+    async function loadStats(){
+      try{
+        renderStatus("სტატისტიკა იტვირთება Firestore-დან...", true);
+        state.docs = await fetchArchiveDocs();
+        const flattened = flattenArchiveDocs(state.docs);
+        state.entries = flattened.entries;
+        state.tests = flattened.tests;
+        state.months = uniq(state.docs.map(doc => doc.month).filter(Boolean)).sort((a, b) => b.localeCompare(a));
+        state.selectedMonth = "all";
+        populateMonthFilter();
+        renderStatus(state.docs.length ? "" : "არქივში ამ სკოპისთვის მონაცემი ჯერ არ არის.", false);
+        renderDashboard();
+      }catch(error){
+        console.error(error);
+        renderStatus("სტატისტიკის წამოღება ვერ მოხერხდა. გადაამოწმე Firestore კავშირი და rules.", false);
+      }
+    }
+    function setupEvents(){
+      const form = document.getElementById("loginForm");
+      const passwordInput = document.getElementById("statsPassword");
+      const errorEl = document.getElementById("loginError");
+      const gate = document.getElementById("loginGate");
+      const app = document.getElementById("statsApp");
+      const monthFilter = document.getElementById("monthFilter");
+      const testFilter = document.getElementById("testFilter");
+
+      form.addEventListener("submit", async ev => {
+        ev.preventDefault();
+        if((passwordInput.value || "").trim() !== PASSWORD){
+          errorEl.textContent = "პაროლი არასწორია.";
+          passwordInput.focus();
+          passwordInput.select();
+          return;
+        }
+        errorEl.textContent = "";
+        gate.classList.add("hidden");
+        app.classList.remove("hidden");
+        updateScopeLinks();
+        await loadStats();
+      });
+
+      monthFilter.addEventListener("change", () => {
+        state.selectedMonth = monthFilter.value || "all";
+        renderDashboard();
+      });
+      testFilter.addEventListener("change", () => {
+        state.selectedTest = testFilter.value || "";
+        renderDashboard();
+      });
+    }
+
+    setupEvents();
+  </script>
+</body>
+</html>
