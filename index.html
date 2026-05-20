@@ -27,6 +27,8 @@
     }
     html[data-view="archive"] #mainChecklistCard,
     html[data-view="archive"] #dailyCard,
+    html[data-view="archive"] .workspaceBar,
+    html[data-view="archive"] .patientCardShell,
     html[data-view="archive"] .search,
     html[data-view="archive"] .patient,
     html[data-view="archive"] #expandAll,
@@ -363,33 +365,683 @@
       margin:0;
     }
 
+    /* Dashboard redesign overrides */
+    body{
+      font-family:Inter,calibri,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(191, 219, 254, .55), transparent 24%),
+        radial-gradient(circle at top right, rgba(187, 247, 208, .34), transparent 28%),
+        linear-gradient(180deg, #f8fbff 0%, #f2f7fc 52%, #f8fbff 100%);
+      color:#1e293b;
+    }
+    .wrap{
+      max-width:1360px;
+      margin:0 auto;
+      padding:28px 18px 48px;
+    }
+    header{
+      margin-bottom:18px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+      padding:18px 22px;
+      border-radius:30px;
+      background:rgba(255,255,255,.92);
+      border:1px solid rgba(148,163,184,.10);
+      box-shadow:0 18px 50px rgba(15,23,42,.07);
+      backdrop-filter:blur(14px);
+    }
+    .brandRow{
+      display:flex;
+      align-items:center;
+      gap:16px;
+      min-width:0;
+    }
+    .brandMark{
+      width:58px;
+      height:58px;
+      display:grid;
+      place-items:center;
+      border-radius:20px;
+      background:linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+      box-shadow:0 16px 32px rgba(59,130,246,.16);
+      color:#2563eb;
+      font-size:28px;
+      flex:0 0 auto;
+    }
+    .brandCopy{
+      min-width:0;
+    }
+    h1{
+      margin:0 0 4px;
+      font-size:24px;
+      line-height:1.1;
+      letter-spacing:-.03em;
+      color:#0f172a;
+    }
+    .sub{
+      margin:0;
+      font-size:12px;
+      color:#64748b;
+      font-weight:600;
+      letter-spacing:.01em;
+    }
+    .toolbar{
+      display:flex;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:flex-end;
+      gap:10px;
+    }
+    .toolbar .btn{
+      min-height:40px;
+      padding:10px 16px;
+      border-radius:16px;
+      font-size:12px;
+      font-weight:700;
+    }
+    .workspaceBar{
+      display:flex;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+      margin:0 0 18px;
+      padding:16px 18px;
+      border-radius:28px;
+      background:#ffffff;
+      border:1px solid rgba(226,232,240,.9);
+      box-shadow:0 14px 36px rgba(15,23,42,.06);
+    }
+    .workspaceDate{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      min-width:220px;
+    }
+    .workspaceIcon{
+      width:40px;
+      height:40px;
+      display:grid;
+      place-items:center;
+      border-radius:14px;
+      background:#eff6ff;
+      color:#2563eb;
+      font-size:18px;
+      flex:0 0 auto;
+    }
+    .workspaceDateCopy{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+      min-width:0;
+    }
+    .workspaceDateCopy strong{
+      font-size:13px;
+      color:#475569;
+    }
+    .workspaceDateCopy span{
+      font-size:11px;
+      color:#94a3b8;
+      font-weight:600;
+    }
+    .workspaceDate .mini{
+      min-width:164px;
+      background:#f8fafc;
+      border-color:#e2e8f0;
+      font-weight:700;
+      color:#2563eb;
+      border-radius:14px;
+    }
+    .workspaceActions{
+      display:flex;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+      gap:10px;
+      flex:1;
+    }
+    .workspaceActions .btn{
+      min-height:42px;
+      padding:10px 14px;
+      border-radius:16px;
+      font-size:12px;
+      font-weight:700;
+      box-shadow:0 8px 18px rgba(148,163,184,.10);
+    }
+    .workspaceActions a.btn{
+      min-height:42px;
+    }
+    .patientCardShell,
+    #mainChecklistCard,
+    #dailyCard,
+    #archiveCard{
+      background:#ffffff;
+      border:1px solid rgba(226,232,240,.92);
+      border-radius:30px;
+      box-shadow:0 18px 42px rgba(15,23,42,.06);
+      overflow:hidden;
+    }
+    .patientCardShell{
+      margin-bottom:18px;
+      padding:22px;
+    }
+    .sectionHeader{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:14px;
+      padding-bottom:16px;
+      margin-bottom:18px;
+      border-bottom:1px solid #f1f5f9;
+    }
+    .sectionTitleWrap{
+      display:flex;
+      align-items:flex-start;
+      gap:12px;
+      min-width:0;
+    }
+    .sectionIcon{
+      width:42px;
+      height:42px;
+      display:grid;
+      place-items:center;
+      border-radius:14px;
+      background:#eff6ff;
+      color:#0284c7;
+      font-size:18px;
+      flex:0 0 auto;
+    }
+    .sectionHeader h2{
+      margin:0;
+      padding:0;
+      border:0;
+      background:transparent;
+      font-size:17px;
+      color:#0f172a;
+      letter-spacing:-.02em;
+    }
+    .sectionCaption{
+      margin:2px 0 0;
+      color:#94a3b8;
+      font-size:12px;
+      font-weight:600;
+      line-height:1.5;
+    }
+    .patient{
+      display:grid;
+      grid-template-columns:repeat(12, minmax(0, 1fr));
+      gap:14px;
+      padding:0;
+      border:0;
+      background:transparent;
+      align-items:end;
+    }
+    .patientField{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      min-width:0;
+    }
+    .patientField label{
+      font-size:11px;
+      color:#64748b;
+      font-weight:700;
+      letter-spacing:.02em;
+    }
+    .patientField.name{ grid-column:span 4; }
+    .patientField.age{ grid-column:span 2; }
+    .patientField.sex{ grid-column:span 2; }
+    .patientField.admit{ grid-column:span 4; }
+    .patientField.outcomeButtons{ grid-column:1 / -1; }
+    .patientField.outcomeDetails{ grid-column:1 / -1; }
+    .patient .mini{
+      width:100%;
+      min-height:46px;
+      padding:12px 14px;
+      border-radius:16px;
+      border:1px solid #e2e8f0;
+      background:#f8fafc;
+      color:#334155;
+      font-size:13px;
+      font-weight:600;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.8);
+    }
+    .patient .mini:focus{
+      border-color:#7dd3fc;
+      box-shadow:0 0 0 4px rgba(14,165,233,.12);
+      background:#fff;
+    }
+    .patientOutcomeButtons{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+    }
+    .patientOutcomeButtons .btn{
+      min-height:42px;
+      padding:10px 16px;
+      border-radius:14px;
+      font-size:12px;
+      font-weight:700;
+    }
+    .patientOutcomeMeta{
+      display:grid;
+      grid-template-columns:repeat(2, minmax(0, 1fr));
+      gap:14px;
+      padding:16px;
+      border-radius:22px;
+      background:#f8fafc;
+      border:1px solid #e2e8f0;
+    }
+    .patientOutcomeMetaBlock{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+    .patientOutcomeMetaBlock span{
+      font-size:11px;
+      color:#94a3b8;
+      font-weight:800;
+      letter-spacing:.06em;
+      text-transform:uppercase;
+    }
+    .patientOutcomeMetaBlock strong{
+      font-size:13px;
+      color:#334155;
+    }
+    .patientField.outcomeDetails:has(#ptDischarge[style*="display:none"]):has(#ptTransferTime[style*="display:none"]):has(#ptTransferDept[style*="display:none"]){
+      display:none;
+    }
+    .patientOutcomeMetaBlock:has(> #ptDischarge[style*="display:none"]),
+    .patientOutcomeMetaBlock:has(> #ptTransferTime[style*="display:none"]),
+    .patientOutcomeMetaBlock:has(> #ptTransferDept[style*="display:none"]){
+      display:none;
+    }
+    .mainSurface{
+      display:grid;
+      gap:18px;
+    }
+    .card h2{
+      margin:0;
+      padding:22px 22px 0;
+      border:0;
+      background:transparent;
+      font-size:18px;
+      color:#0f172a;
+      letter-spacing:-.02em;
+    }
+    .card .content{
+      padding:18px 22px 22px;
+    }
+    .checklistTopbar{
+      display:flex;
+      flex-wrap:wrap;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:16px;
+      padding:0 22px 18px;
+      border-bottom:1px solid #f1f5f9;
+      margin:10px 0 18px;
+    }
+    .checklistMeta{
+      display:flex;
+      align-items:flex-start;
+      gap:12px;
+      min-width:0;
+      flex:1;
+    }
+    .checklistMeta .sectionIcon{
+      width:44px;
+      height:44px;
+    }
+    .checklistMeta p{
+      margin:4px 0 0;
+      color:#94a3b8;
+      font-size:12px;
+      font-weight:600;
+      line-height:1.5;
+    }
+    .checklistActions{
+      display:flex;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+      gap:10px;
+    }
+    .checklistActions .btn{
+      min-height:40px;
+      padding:10px 14px;
+      border-radius:14px;
+      font-size:12px;
+      font-weight:700;
+    }
+    .searchRow{
+      margin:0 22px 18px;
+    }
+    .search{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:0 16px;
+      min-height:52px;
+      border-radius:18px;
+      border:1px solid #e2e8f0;
+      background:#f8fafc;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.85);
+    }
+    .search .muted{
+      font-size:12px;
+      font-weight:800;
+      color:#94a3b8;
+      text-transform:uppercase;
+      letter-spacing:.06em;
+      white-space:nowrap;
+    }
+    .search input{
+      width:100%;
+      max-width:none;
+      border:0;
+      outline:none;
+      background:transparent;
+      color:#334155;
+      font-size:14px;
+      font-weight:600;
+      padding:14px 0;
+    }
+    .list{
+      gap:14px;
+    }
+    .item{
+      border-radius:24px;
+      border:1px solid #e2e8f0;
+      background:#fff;
+      box-shadow:0 12px 30px rgba(148,163,184,.10);
+      transition:border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+    }
+    .item:hover{
+      border-color:#cbd5e1;
+      box-shadow:0 18px 36px rgba(148,163,184,.16);
+      transform:translateY(-1px);
+    }
+    .item button{
+      padding:18px 20px;
+      font-size:14px;
+      font-weight:700;
+      color:#1e293b;
+    }
+    .item button:hover{
+      background:#f8fafc;
+    }
+    .tag{
+      padding:8px 12px;
+      border-radius:12px;
+      background:#f8fafc;
+      border:1px solid #e2e8f0;
+      color:#94a3b8;
+      font-size:11px;
+      font-weight:700;
+    }
+    .panel{
+      padding:18px 20px 20px;
+      border-top:1px solid #f1f5f9;
+      background:#f8fbff;
+    }
+    .panelTop{
+      margin:0 0 14px;
+    }
+    .panelTop .btn{
+      min-height:38px;
+      padding:9px 12px;
+      border-radius:12px;
+      font-weight:700;
+    }
+    .cols{
+      gap:16px;
+    }
+    .box{
+      background:#fff;
+      border:1px solid #e2e8f0;
+      border-radius:22px;
+      padding:18px;
+      box-shadow:0 10px 22px rgba(148,163,184,.08);
+    }
+    .box h3{
+      margin:0 0 12px;
+      padding-bottom:10px;
+      border-bottom:1px solid #f1f5f9;
+      font-size:12px;
+      font-weight:800;
+      color:#334155;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+    }
+    .chk{
+      margin:10px 0;
+      gap:10px;
+    }
+    .chk input[type="checkbox"]{
+      width:17px;
+      height:17px;
+      margin-top:4px;
+      accent-color:#0ea5e9;
+      cursor:pointer;
+    }
+    .chk label{
+      font-size:13px;
+      line-height:1.55;
+      color:#475569;
+      font-weight:600;
+    }
+    .orderer-wrap,
+    .custom-entry-wrap{
+      padding:12px;
+      border-radius:14px;
+      background:#f8fafc;
+      border:1px solid #e2e8f0;
+    }
+    .orderer-label{
+      min-width:auto;
+      font-size:11px;
+      font-weight:700;
+      color:#64748b;
+      text-transform:uppercase;
+      letter-spacing:.04em;
+    }
+    .optTableWrap{
+      margin-top:18px;
+      border-radius:22px;
+      border:1px solid #e2e8f0;
+      box-shadow:0 10px 22px rgba(148,163,184,.08);
+    }
+    .optTableWrap .optTitle{
+      padding:12px 14px;
+      background:#f8fafc;
+      border-bottom:1px solid #e2e8f0;
+      font-size:13px;
+      color:#334155;
+    }
+    #dailyCard h2,
+    #archiveCard h2{
+      padding-bottom:0;
+    }
+    #dailyCard .content,
+    #archiveCard .content{
+      padding-top:12px;
+    }
+    #dailyTable,
+    .archiveTable{
+      font-size:12px !important;
+      min-width:1080px;
+    }
+    #dailyTable th,
+    .archiveTable th{
+      background:#f8fafc;
+      color:#64748b;
+      font-size:11px;
+      text-transform:uppercase;
+      letter-spacing:.05em;
+      font-weight:800;
+    }
+    #dailyTable td,
+    .archiveTable td{
+      color:#334155;
+      background:#fff;
+    }
+    #dailyTable tr:hover td,
+    .archiveTable tr:hover td{
+      background:#f8fbff;
+    }
+    .archiveGroup{
+      border-radius:22px;
+      border-color:#e2e8f0;
+      box-shadow:0 10px 24px rgba(148,163,184,.08);
+    }
+    .archiveToggle{
+      padding:16px 18px;
+      font-size:13px;
+      font-weight:700;
+    }
+    .archivePanel{
+      padding:18px;
+      background:#f8fbff;
+    }
+    @media (max-width: 1080px){
+      .patientField.name,
+      .patientField.admit{ grid-column:span 6; }
+      .patientField.age,
+      .patientField.sex{ grid-column:span 3; }
+    }
+    @media (max-width: 760px){
+      .wrap{ padding:18px 14px 40px; }
+      header,
+      .workspaceBar,
+      .patientCardShell,
+      #mainChecklistCard,
+      #dailyCard,
+      #archiveCard{
+        border-radius:24px;
+      }
+      .brandRow{ align-items:flex-start; }
+      .brandMark{ width:50px; height:50px; font-size:24px; border-radius:16px; }
+      .patient{
+        grid-template-columns:1fr;
+      }
+      .patientField,
+      .patientField.name,
+      .patientField.age,
+      .patientField.sex,
+      .patientField.admit{
+        grid-column:1 / -1;
+      }
+      .patientOutcomeMeta{
+        grid-template-columns:1fr;
+      }
+      .checklistTopbar,
+      .searchRow{
+        margin-left:18px;
+        margin-right:18px;
+      }
+      .card h2{
+        padding-left:18px;
+        padding-right:18px;
+      }
+      .card .content{
+        padding-left:18px;
+        padding-right:18px;
+      }
+      .item button{
+        align-items:flex-start;
+        flex-direction:column;
+      }
+    }
+
 
 </style>
 </head>
 <body>
 <div class="wrap">
 <header>
-<div>
+<div class="brandRow">
+<div class="brandMark">⌁</div>
+<div class="brandCopy">
 <h1>ER ორდერ-სეტი: ესენციური/არჩევითი ლაბორატორიული/გამომსახველობითი კვლევები</h1>
-<p class="sub">ინტერაქტიული ჩეკლისტი ნიშნების/სიმპტომების/სინდრომების მიხედვით</p>
+<p class="sub">ინტერაქტიული გზამკვლევი ნიშნების, სიმპტომებისა და სინდრომების მიხედვით</p>
+</div>
 </div>
 <div class="toolbar">
-<div class="search" title="პრეზენტაციების გაფილტვრა">
-<span class="muted">ძებნა</span>
-<input id="q" placeholder="მაგ.: ტკივილი გულმკერდში, სეფსისი, თავის ტკივილი..." type="text"/>
+<a class="btn" href="./archive.html" id="toggleArchive" rel="noopener noreferrer" target="_blank">არქივი</a>
+<a class="btn" href="./stats.html" id="toggleStats" rel="noopener noreferrer" target="_blank">სტატისტიკა</a>
+</div>
+</header>
+<section class="workspaceBar">
+<div class="workspaceDate">
+<div class="workspaceIcon">🗓</div>
+<div class="workspaceDateCopy">
+<strong>დღის მართვა</strong>
+<span>აირჩიე თარიღი და მორიგეობის მოქმედება</span>
+</div>
+<input class="mini" id="dayPick" title="აირჩიე დღე" type="date"/>
+</div>
+<div class="workspaceActions">
+<button class="btn" id="restoreDailyByDate" type="button">თარიღიდან აღდგენა</button>
+<button class="btn" id="archiveDaily" type="button">არქივში გადატანა</button>
+<button class="btn" id="toggleDaily" type="button">დღის ცხრილი</button>
+<button class="btn" id="printDaily" type="button">დღის ცხრილის ბეჭდვა</button>
+<button class="btn" id="clearDaily" title="მხოლოდ არჩეული დღის ჩანაწერების წაშლა" type="button">დღის გასუფთავება</button>
+</div>
+</section>
+
+<section class="patientCardShell">
+<div class="sectionHeader">
+<div class="sectionTitleWrap">
+<div class="sectionIcon">✚</div>
+<div>
+<h2>პაციენტის მონაცემები</h2>
+<p class="sectionCaption">შეავსე პაციენტის ძირითადი ინფორმაცია ამობეჭდვის, დღიური ცხრილისა და არქივისთვის</p>
+</div>
+</div>
+<button class="btn" id="resetChecks">გასუფთავება</button>
 </div>
 <div class="patient" title="Patient details (included when printing selected tests)">
-<input aria-label="პაციენტის სახელი და გვარი" class="mini" id="ptName" placeholder="პაციენტი" type="text"/>
+<div class="patientField name">
+<label for="ptName">პაციენტი (სახელი, გვარი)</label>
+<input aria-label="პაციენტის სახელი და გვარი" class="mini" id="ptName" placeholder="სახელი, გვარი" type="text"/>
+</div>
+<div class="patientField age">
+<label for="ptAge">ასაკი</label>
 <input aria-label="ასაკი" class="mini" id="ptAge" max="130" min="0" placeholder="ასაკი" type="number"/>
+</div>
+<div class="patientField sex">
+<label for="ptSex">სქესი</label>
 <select aria-label="სქესი" class="mini" id="ptSex">
 <option value="">სქესი</option>
 <option value="Female">ქალი</option>
 <option value="Male">კაცი</option>
 </select>
+</div>
+<div class="patientField admit">
+<label for="ptAdmit">ჰოსპიტალიზაციის თარიღი/დრო</label>
 <input aria-label="ჰოსპიტალიზაციის თარიღი/დრო" class="mini" id="ptAdmit" type="datetime-local"/>
+</div>
+<div class="patientField outcomeButtons">
+<div class="patientOutcomeButtons">
 <button class="btn" id="ptDischargeBtn" type="button" title="გაწერის დროის დაფიქსირება">გაწერა</button>
 <button class="btn" id="ptTransferBtn" type="button" title="გადაყვანის დროისა და განყოფილების დაფიქსირება">გადაყვანა</button>
+<button class="btn" id="cancelEdit" style="display:none;" type="button">რედაქტირების გაუქმება</button>
+</div>
+</div>
+<div class="patientField outcomeDetails">
+<div class="patientOutcomeMeta">
+<div class="patientOutcomeMetaBlock">
+<span>გაწერის დრო</span>
 <input aria-label="გაწერის დრო" class="mini" id="ptDischarge" placeholder="გაწერის დრო" readonly type="text" style="display:none;"/>
+</div>
+<div class="patientOutcomeMetaBlock">
+<span>გადაყვანის დრო</span>
+<input aria-label="გადაყვანის დრო" class="mini" id="ptTransferTime" placeholder="გადაყვანის დრო" readonly type="text" style="display:none;"/>
+</div>
+<div class="patientOutcomeMetaBlock" style="grid-column:1 / -1;">
+<span>გადაყვანის განყოფილება</span>
 <input aria-label="გადაყვანის განყოფილება" class="mini" id="ptTransferDept" list="deptOptions" placeholder="გადაყვანის განყოფილება" style="display:none;" type="text"/>
 <datalist id="deptOptions">
   <option value="ზოგადი რეანიმაცია"></option>
@@ -412,27 +1064,36 @@
   <option value="ონკოჰემატოლოგია 2"></option>
   <option value="გინეკოლოგია"></option>
 </datalist>
-<input aria-label="გადაყვანის დრო" class="mini" id="ptTransferTime" placeholder="გადაყვანის დრო" readonly type="text" style="display:none;"/>
 </div>
+</div>
+</div>
+</div>
+</section>
+
+<div class="mainSurface">
+<section class="card" id="mainChecklistCard" style="grid-column:1 / -1;">
+<h2>ნიშნების / სიმპტომების / სინდრომების მიხედვით</h2>
+<div class="checklistTopbar">
+<div class="checklistMeta">
+<div class="sectionIcon">☰</div>
+<div>
+<strong style="display:block;font-size:16px;color:#0f172a;">კლინიკური პრეზენტაციები</strong>
+<p>აირჩიე შესაბამისი სიმპტომური პანელი, მონიშნე კვლევები და დაამატე მიმდინარე დღის ცხრილში.</p>
+</div>
+</div>
+<div class="checklistActions">
 <button class="btn" id="expandAll">ყველას გახსნა</button>
 <button class="btn" id="collapseAll">ყველას დახურვა</button>
 <button class="btn" onclick="printSelected()">ბეჭდვა</button>
-<button class="btn" id="resetChecks">გასუფთავება</button>
-<input class="mini" id="dayPick" title="აირჩიე დღე" type="date"/>
 <button class="btn" id="addToDaily" type="button">დღიურ ცხრილში დამატება</button>
-<button class="btn" id="cancelEdit" style="display:none;" type="button">რედაქტირების გაუქმება</button>
-<button class="btn" id="toggleDaily" type="button">დღის ცხრილი</button>
-<button class="btn" id="printDaily" type="button">დღის ცხრილის ბეჭდვა</button>
-<button class="btn" id="archiveDaily" type="button">არქივში გადატანა</button>
-<button class="btn" id="restoreDailyByDate" type="button">თარიღიდან აღდგენა</button>
-<a class="btn" href="./archive.html" id="toggleArchive" rel="noopener noreferrer" target="_blank">არქივი</a>
-<a class="btn" href="./stats.html" id="toggleStats" rel="noopener noreferrer" target="_blank">სტატისტიკა</a>
-<button class="btn" id="clearDaily" title="მხოლოდ არჩეული დღის ჩანაწერების წაშლა" type="button">დღის გასუფთავება</button>
 </div>
-</header>
-<div class="grid">
-<section class="card" id="mainChecklistCard" style="grid-column:1 / -1;">
-<h2>ნიშნების / სიმპტომების / სინდრომების მიხედვით</h2>
+</div>
+<div class="searchRow">
+<div class="search" title="პრეზენტაციების გაფილტვრა">
+<span class="muted">ძებნა</span>
+<input id="q" placeholder="მაგ.: ტკივილი გულმკერდში, სეფსისი, თავის ტკივილი..." type="text"/>
+</div>
+</div>
 <div class="content">
 <div class="list" id="list"></div>
 </div>
