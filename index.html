@@ -35,11 +35,10 @@
     html[data-view="archive"] #collapseAll,
     html[data-view="archive"] #resetChecks,
     html[data-view="archive"] #dayPick,
-    html[data-view="archive"] #addToDaily,
+    html[data-view="archive"] #saveEntry,
     html[data-view="archive"] #cancelEdit,
     html[data-view="archive"] #toggleDaily,
     html[data-view="archive"] #printDaily,
-    html[data-view="archive"] #archiveDaily,
     html[data-view="archive"] #restoreDailyByDate,
     html[data-view="archive"] #clearDaily,
     html[data-view="archive"] button[onclick="printSelected()"]{
@@ -74,25 +73,12 @@
     .btn:hover{border-color:rgba(0,0,0,.22)}
     #ptTransferBtn{ background:#fca5a5; }
     #ptDischargeBtn{ background:#86efac; }
-    #addToDaily{ background:#fde68a; }
-    #archiveDaily{
-      background:linear-gradient(135deg, #93c5fd 0%, #bfdbfe 100%);
-      box-shadow:0 0 0 1px rgba(59,130,246,.16), 0 0 0 0 rgba(96,165,250,.45), 0 10px 24px rgba(37,99,235,.18);
-      animation:archiveGlow 2.8s ease-in-out infinite;
-    }
+    #saveEntry{ background:#fde68a; }
     #restoreDailyByDate{ background:#c4b5fd; }
     #toggleArchive{ background:#bfdbfe; }
     #toggleStats{ background:#a7f3d0; }
     #resetChecks, #clearDaily{ background:#f87171; }
     #dailyTbody button[data-del]{ background:#f87171; }
-    @keyframes archiveGlow{
-      0%, 100%{
-        box-shadow:0 0 0 1px rgba(59,130,246,.16), 0 0 0 0 rgba(96,165,250,.30), 0 10px 24px rgba(37,99,235,.18);
-      }
-      50%{
-        box-shadow:0 0 0 1px rgba(59,130,246,.18), 0 0 0 8px rgba(96,165,250,.12), 0 14px 32px rgba(37,99,235,.24);
-      }
-    }
     .search{
       display:flex; align-items:center; gap:8px; padding:8px 10px;
       border:1px solid var(--line); border-radius:10px; background:var(--card);
@@ -128,10 +114,6 @@
       border-color:#ef4444;
       box-shadow:0 0 0 3px rgba(239,68,68,.12);
     }
-    @media (prefers-reduced-motion: reduce){
-      #archiveDaily{ animation:none; }
-    }
-
 .grid{
       display:grid; grid-template-columns: 380px 1fr; gap:14px;
     }
@@ -180,6 +162,19 @@
       padding:6px 8px;
       font-size:11px;
       border-radius:10px;
+    }
+    .panelBottomActions{
+      display:flex;
+      justify-content:flex-end;
+      margin-top:12px;
+    }
+    .item button.panelAddToDaily{
+      width:auto;
+      text-align:center;
+      justify-content:center;
+      border:1px solid var(--line);
+      background:#fde68a;
+      font-weight:800;
     }
 
     .item.open{grid-column:1 / -1}
@@ -795,6 +790,16 @@
       border-radius:12px;
       font-weight:700;
     }
+    .panelBottomActions{
+      margin-top:16px;
+    }
+    .item button.panelAddToDaily{
+      min-height:40px;
+      padding:10px 14px;
+      border-color:#f59e0b;
+      color:#78350f;
+      box-shadow:0 10px 18px rgba(245,158,11,.14);
+    }
     .cols{
       gap:16px;
     }
@@ -984,7 +989,6 @@
 </div>
 <div class="workspaceActions">
 <button class="btn" id="restoreDailyByDate" type="button">თარიღიდან აღდგენა</button>
-<button class="btn" id="archiveDaily" type="button">არქივში გადატანა</button>
 <button class="btn" id="toggleDaily" type="button">დღის ცხრილი</button>
 <button class="btn" id="printDaily" type="button">დღის ცხრილის ბეჭდვა</button>
 <button class="btn" id="clearDaily" title="მხოლოდ არჩეული დღის ჩანაწერების წაშლა" type="button">დღის გასუფთავება</button>
@@ -1085,7 +1089,7 @@
 <button class="btn" id="expandAll">ყველას გახსნა</button>
 <button class="btn" id="collapseAll">ყველას დახურვა</button>
 <button class="btn" onclick="printSelected()">ბეჭდვა</button>
-<button class="btn" id="addToDaily" type="button">დღიურ ცხრილში დამატება</button>
+<button class="btn" id="saveEntry" type="button">შენახვა</button>
 </div>
 </div>
 <div class="searchRow">
@@ -1910,11 +1914,11 @@
   }
   function buildArchivePageUrl(){
     const params = new URLSearchParams(window.location.search);
-    params.delete("view");
+    params.set("view", "archive");
     params.delete("editDate");
     params.delete("editEntry");
     const query = params.toString();
-    return `./archive.html${query ? "?" + query : ""}`;
+    return `./index.html${query ? "?" + query : ""}`;
   }
   function buildStatsPageUrl(){
     const params = new URLSearchParams(window.location.search);
@@ -1962,11 +1966,10 @@
       "collapseAll",
       "resetChecks",
       "dayPick",
-      "addToDaily",
+      "saveEntry",
       "cancelEdit",
       "toggleDaily",
       "printDaily",
-      "archiveDaily",
       "clearDaily"
     ];
 
@@ -2103,9 +2106,7 @@
     return `${archiveScopeKey()}__${dateStr}`.replace(/\//g, "_");
   }
   function getDailyDocRef(dateStr){
-    const db = getFirestoreDb();
-    if(!(db && dateStr)) return null;
-    return db.collection("ed_orderset_daily").doc(dailyDocId(dateStr));
+    return null;
   }
   function getLegacyDailyDocRef(dateStr){
     const db = getFirestoreDb();
@@ -2206,6 +2207,20 @@
     for(const dateStr of dates){
       if(!loadDay(dateStr).length) continue;
       await syncDailyDayToFirestore(dateStr);
+    }
+  }
+  async function hydrateAllDailyDaysFromFirestore(){
+    return [];
+  }
+  async function deleteDailyDayFromFirestore(dateStr){
+    const ref = getDailyDocRef(dateStr);
+    if(!ref) return { ok:false, reason:"no-db" };
+    try{
+      await ref.delete();
+      return { ok:true };
+    }catch(e){
+      console.error("Daily Firestore delete failed", e);
+      return { ok:false, reason:"delete-failed" };
     }
   }
 
@@ -2815,7 +2830,7 @@ function otherTextKey(id){ return storageKey("other_text_" + id); }
 
     if(issues.length){
       const uniqueIssues = uniqPreserve(issues).slice(0, 10);
-      alert(`არქივში გადატანამდე ყველა არჩევით/სხვა კვლევაზე ექიმი და სპეციალობა უნდა იყოს შევსებული:\n\n- ${uniqueIssues.join("\n- ")}`);
+      alert(`შენახვამდე ყველა არჩევით/სხვა კვლევაზე ექიმი და სპეციალობა უნდა იყოს შევსებული:\n\n- ${uniqueIssues.join("\n- ")}`);
       return false;
     }
     return true;
@@ -3157,6 +3172,21 @@ function otherTextKey(id){ return storageKey("other_text_" + id); }
         `;
         panel.appendChild(optWrap);
 
+        const bottomActions = document.createElement("div");
+        bottomActions.className = "panelBottomActions";
+        const addPanelBtn = document.createElement("button");
+        addPanelBtn.type = "button";
+        addPanelBtn.className = "btn panelAddToDaily";
+        addPanelBtn.textContent = "შენახვა";
+        addPanelBtn.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          ACTIVE_KEY = d.key;
+          saveCurrentEntry();
+        });
+        bottomActions.appendChild(addPanelBtn);
+        panel.appendChild(bottomActions);
+
         // Live updates for this panel (checkboxes, orderer name, orderer specialty)
         panel.addEventListener("change", (ev) => {
           const t = ev.target;
@@ -3195,12 +3225,18 @@ document.getElementById("expandAll").addEventListener("click", () => {
   document.getElementById("resetChecks").addEventListener("click", () => {
     // Clear all persisted values for this app (patient fields, checkboxes, orderer/spec, optional selection times)
     const prefixes = getAllScopedPrefixes();
-    const keys = [];
+    const keys = new Set();
     for (let i=0;i<localStorage.length;i++) {
       const k = localStorage.key(i);
-      if (k && prefixes.some(p => k.startsWith(p))) keys.push(k);
+      if (k && prefixes.some(p => k.startsWith(p))) keys.add(k);
     }
-    keys.forEach(k => localStorage.removeItem(k));
+    try{
+      for (let i=0;i<browserLocalStorage.length;i++) {
+        const k = browserLocalStorage.key(i);
+        if (k && prefixes.some(p => k.startsWith(p))) keys.add(k);
+      }
+    }catch(e){}
+    keys.forEach(removeStoredKey);
 
     // Clear all UI inputs (patient + search + optional orderer/spec) and all checked boxes
     if(q) q.value = "";
@@ -3271,13 +3307,20 @@ document.getElementById("expandAll").addEventListener("click", () => {
   }
   function listLocalDayDates(){
     const prefix = `${sharedStorageKey("daily_log")}:`;
-    const out = [];
+    const out = new Set();
     for(let i = 0; i < localStorage.length; i++){
       const k = localStorage.key(i);
       if(!k || !k.startsWith(prefix)) continue;
-      out.push(k.slice(prefix.length));
+      out.add(k.slice(prefix.length));
     }
-    return out.sort((a, b) => b.localeCompare(a));
+    try{
+      for(let i = 0; i < browserLocalStorage.length; i++){
+        const k = browserLocalStorage.key(i);
+        if(!k || !k.startsWith(prefix)) continue;
+        out.add(k.slice(prefix.length));
+      }
+    }catch(e){}
+    return [...out].sort((a, b) => b.localeCompare(a));
   }
   function dayKey(dateStr){ return `${sharedStorageKey("daily_log")}:${dateStr}`; }
   function archiveDayKey(dateStr){ return `${sharedStorageKey("archive_day")}:${dateStr}`; }
@@ -3294,31 +3337,44 @@ document.getElementById("expandAll").addEventListener("click", () => {
     return `daily__${archiveScopeKey()}__${dateStr}`.replace(/\//g, "_");
   }
   function loadDay(dateStr){
-    try{ return JSON.parse(localStorage.getItem(dayKey(dateStr)) || "[]"); }
+    try{ return JSON.parse(localStorage.getItem(dayKey(dateStr)) || browserLocalStorage.getItem(dayKey(dateStr)) || "[]"); }
     catch(e){ return []; }
   }
   function saveDay(dateStr, arr, options){
     const next = Array.isArray(arr) ? arr : [];
     localStorage.setItem(dayKey(dateStr), JSON.stringify(next));
+    try{ browserLocalStorage.setItem(dayKey(dateStr), JSON.stringify(next)); }catch(e){}
     if(options?.sync === false) return;
     scheduleDailyFirestoreSync(dateStr);
   }
   function loadArchiveDay(dateStr){
-    try{ return JSON.parse(localStorage.getItem(archiveDayKey(dateStr)) || "null"); }
+    try{ return JSON.parse(localStorage.getItem(archiveDayKey(dateStr)) || browserLocalStorage.getItem(archiveDayKey(dateStr)) || "null"); }
     catch(e){ return null; }
   }
   function saveArchiveDay(dateStr, doc){
     localStorage.setItem(archiveDayKey(dateStr), JSON.stringify(doc));
+    try{ browserLocalStorage.setItem(archiveDayKey(dateStr), JSON.stringify(doc)); }catch(e){}
+  }
+  function removeStoredKey(key){
+    localStorage.removeItem(key);
+    try{ browserLocalStorage.removeItem(key); }catch(e){}
   }
   function listArchiveDates(){
     const prefix = `${sharedStorageKey("archive_day")}:`;
-    const out = [];
+    const out = new Set();
     for(let i = 0; i < localStorage.length; i++){
       const k = localStorage.key(i);
       if(!k || !k.startsWith(prefix)) continue;
-      out.push(k.slice(prefix.length));
+      out.add(k.slice(prefix.length));
     }
-    return out.sort((a, b) => b.localeCompare(a));
+    try{
+      for(let i = 0; i < browserLocalStorage.length; i++){
+        const k = browserLocalStorage.key(i);
+        if(!k || !k.startsWith(prefix)) continue;
+        out.add(k.slice(prefix.length));
+      }
+    }catch(e){}
+    return [...out].sort((a, b) => b.localeCompare(a));
   }
   function archiveDocSignature(doc){
     const entries = (doc?.entries || []).map(entrySignature).sort().join("||");
@@ -3542,9 +3598,9 @@ document.getElementById("expandAll").addEventListener("click", () => {
   let dailyEdit = { date:"", id:"" };
   function exitEditMode(){
     dailyEdit = { date:"", id:"" };
-    const addBtn = document.getElementById("addToDaily");
+    const saveBtn = document.getElementById("saveEntry");
     const cancelBtn = document.getElementById("cancelEdit");
-    if(addBtn) addBtn.textContent = "დღიურ ცხრილში დამატება";
+    if(saveBtn) saveBtn.textContent = "შენახვა";
     if(cancelBtn) cancelBtn.style.display = "none";
   }
   function startEditMode(dateStr, id){
@@ -3557,9 +3613,9 @@ document.getElementById("expandAll").addEventListener("click", () => {
     if(dayPick) dayPick.value = dateStr;
     restoreEntryIntoForm(entry);
     dailyEdit = { date: dateStr, id };
-    const addBtn = document.getElementById("addToDaily");
+    const saveBtn = document.getElementById("saveEntry");
     const cancelBtn = document.getElementById("cancelEdit");
-    if(addBtn) addBtn.textContent = "ჩანაწერის განახლება";
+    if(saveBtn) saveBtn.textContent = "ჩანაწერის განახლება";
     if(cancelBtn) cancelBtn.style.display = "inline-flex";
     const dailyCard = document.getElementById("dailyCard");
     if(dailyCard) dailyCard.style.display = "block";
@@ -3765,7 +3821,11 @@ document.getElementById("expandAll").addEventListener("click", () => {
             <span class="tag">პაციენტები: ${entries.length} • E/O/C: ${counts.essential}/${counts.optional}/${counts.custom}</span>
           </button>
           <div class="archivePanel">
-            <p class="archiveMeta">ER მორიგე ექიმი: ${escapeHTML(doc?.erDutyDoctor || "—")} • არქივში გადასვლის დრო: ${escapeHTML(doc?.archivedAtLocal || "—")} • Firebase sync: ${doc?.firebaseSynced ? "კი" : "არა"}</p>
+            <p class="archiveMeta">
+              ER მორიგე ექიმი: ${escapeHTML(doc?.erDutyDoctor || "—")}
+              <button class="btn" data-archive-doctor="${dateStr}" type="button">ექიმის რედაქტირება</button>
+              • არქივში გადასვლის დრო: ${escapeHTML(doc?.archivedAtLocal || "—")} • Firebase sync: ${doc?.firebaseSynced ? "კი" : "არა"}
+            </p>
             <div style="overflow:auto;">${buildArchiveTable(doc, entries)}</div>
           </div>
         </div>
@@ -3783,6 +3843,13 @@ document.getElementById("expandAll").addEventListener("click", () => {
         const id = btn.getAttribute("data-archive-edit");
         const dateStr = btn.getAttribute("data-archive-date");
         if(id && dateStr) startArchiveEntryEdit(dateStr, id);
+      });
+    });
+    groups.querySelectorAll("button[data-archive-doctor]").forEach(btn => {
+      btn.addEventListener("click", async ev => {
+        ev.stopPropagation();
+        const dateStr = btn.getAttribute("data-archive-doctor");
+        if(dateStr) await updateArchiveDutyDoctor(dateStr);
       });
     });
     groups.querySelectorAll("button[data-archive-del]").forEach(btn => {
@@ -3910,8 +3977,18 @@ document.getElementById("expandAll").addEventListener("click", () => {
     return mergeArchiveEntries(existingEntries || [], incomingEntries || []);
   }
   function mergeArchiveEntries(existingEntries, incomingEntries){
-    const bySignature = new Map();
+    const byId = new Map();
+    const noIdEntries = [];
     [...(existingEntries || []), ...(incomingEntries || [])].forEach(entry => {
+      const id = String(entry?.id || "").trim();
+      if(id){
+        byId.set(id, entry);
+      }else{
+        noIdEntries.push(entry);
+      }
+    });
+    const bySignature = new Map();
+    [...byId.values(), ...noIdEntries].forEach(entry => {
       bySignature.set(entrySignature(entry), entry);
     });
     return [...bySignature.values()].sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
@@ -4081,11 +4158,12 @@ document.getElementById("expandAll").addEventListener("click", () => {
       return { ok:false, reason:"delete-failed" };
     }
   }
-  async function persistArchiveDay(doc){
+  async function persistArchiveDay(doc, options){
+    const opts = options || {};
     const remoteCurrent = await fetchArchiveDayFromFirestore(doc.date);
     const localCurrent = loadArchiveDay(doc.date);
     const mergedDoc = mergeArchiveDoc(mergeArchiveDoc(remoteCurrent, localCurrent), doc);
-    if(remoteCurrent?.erDutyDoctor){
+    if(!opts.allowDoctorUpdate && remoteCurrent?.erDutyDoctor){
       mergedDoc.erDutyDoctor = remoteCurrent.erDutyDoctor;
     }else if(localCurrent?.erDutyDoctor && !mergedDoc.erDutyDoctor){
       mergedDoc.erDutyDoctor = localCurrent.erDutyDoctor;
@@ -4121,6 +4199,7 @@ document.getElementById("expandAll").addEventListener("click", () => {
     if(nextEntries.length === 0){
       await pushArchiveBackupToFirestore(archiveDoc, "before-delete");
       localStorage.removeItem(archiveDayKey(dateStr));
+      try{ browserLocalStorage.removeItem(archiveDayKey(dateStr)); }catch(e){}
       renderArchive();
       const remoteDelete = await deleteArchiveDayFromFirestore(dateStr);
       if(!remoteDelete.ok){
@@ -4144,16 +4223,38 @@ document.getElementById("expandAll").addEventListener("click", () => {
     renderArchive();
     alert("ჩანაწერი ლოკალურად წაიშალა, მაგრამ Firebase სინქი ვერ დასრულდა.");
   }
+  async function updateArchiveDutyDoctor(dateStr){
+    await hydrateArchiveDayFromFirestore(dateStr);
+    const archiveDoc = loadArchiveDay(dateStr);
+    if(!archiveDoc){
+      alert("არქივის დღე ვერ მოიძებნა.");
+      return;
+    }
+    const current = archiveDoc.erDutyDoctor || "";
+    const next = window.prompt("შეიყვანე ER მორიგე ექიმის სახელი და გვარი", current);
+    if(next === null) return;
+    const nextDoc = {
+      ...archiveDoc,
+      erDutyDoctor: next.trim(),
+      updatedAtLocal: fmtNow(),
+      firebaseSynced: false
+    };
+    const result = await persistArchiveDay(nextDoc, { allowDoctorUpdate:true });
+    renderArchive();
+    if(!result.ok){
+      alert("ექიმის სახელი ლოკალურად შეიცვალა, მაგრამ Firebase სინქი ვერ დასრულდა.");
+    }
+  }
   async function hydrateArchiveFromFirestore(){
     let docs = [];
     try{
-      docs = await fetchArchiveDocsViaRest();
-    }catch(restError){
-      console.warn("Archive REST load failed, falling back to Firestore SDK.", restError);
+      docs = await fetchArchiveDocsViaSdk();
+    }catch(sdkError){
+      console.warn("Archive SDK load failed, falling back to Firestore REST.", sdkError);
       try{
-        docs = await fetchArchiveDocsViaSdk();
-      }catch(sdkError){
-        console.error("Archive Firestore load failed", sdkError);
+        docs = await fetchArchiveDocsViaRest();
+      }catch(restError){
+        console.error("Archive Firestore load failed", restError);
         return;
       }
     }
@@ -4178,7 +4279,7 @@ document.getElementById("expandAll").addEventListener("click", () => {
     if(!entries.length){
       return { ok:false, reason:"empty" };
     }
-    if(!validateEntryListForArchive(entries)){
+    if(opts.allowMissingOrdererMeta !== true && !validateEntryListForArchive(entries)){
       return { ok:false, reason:"missing-orderer-meta" };
     }
 
@@ -4207,21 +4308,35 @@ document.getElementById("expandAll").addEventListener("click", () => {
     renderArchive();
     return { ok:true, remoteOk:persisted.ok };
   }
-  async function archiveSelectedDay(){
-    const dateStr = getCurrentDay();
-    const archiveBtn = document.getElementById("archiveDaily");
-    if(archiveBtn) archiveBtn.disabled = true;
-    const result = await archiveDayByDate(dateStr, { askDoctor:true });
-    if(archiveBtn) archiveBtn.disabled = false;
-
-    if(result.reason === "empty"){
-      alert("ამ დღეზე ჩანაწერი არ არის.");
-      return;
+  function isDayReadyForAutoArchive(dateStr){
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr || ""))) return false;
+    const [year, month, day] = dateStr.split("-").map(Number);
+    const closesAt = new Date(year, month - 1, day + 1, 0, 0, 0, 0);
+    return Date.now() >= closesAt.getTime();
+  }
+  function removeLocalDailyDay(dateStr){
+    localStorage.removeItem(dayKey(dateStr));
+    try{ browserLocalStorage.removeItem(dayKey(dateStr)); }catch(e){}
+  }
+  async function autoArchiveExpiredDailyDays(){
+    await hydrateAllDailyDaysFromFirestore();
+    const dates = listLocalDayDates().filter(dateStr => isDayReadyForAutoArchive(dateStr) && loadDay(dateStr).length);
+    for(const dateStr of dates){
+      const result = await archiveDayByDate(dateStr, {
+        askDoctor:false,
+        allowMissingOrdererMeta:true,
+        auto:true
+      });
+      if(!result.ok) continue;
+      if(result.remoteOk){
+        removeLocalDailyDay(dateStr);
+        await deleteDailyDayFromFirestore(dateStr);
+      }
     }
-    if(result.reason === "cancelled") return;
-    if(result.reason === "missing-orderer-meta") return;
-
-    alert(result.remoteOk ? "დღის ცხრილი არქივში დაემატა (დღიური არ წაიშალა)." : "დღის ცხრილი ლოკალურ არქივში დაემატა (დღიური არ წაიშალა). Firebase სინქი მოგვიანებით შეგვიძლია გავამაგროთ.");
+    if(dates.length){
+      renderArchive();
+      renderDaily(getCurrentDay());
+    }
   }
   async function restoreDayByPrompt(){
     const raw = window.prompt("შეიყვანე თარიღი (მაგ: 03.14.2026 ან 2026-03-14)");
@@ -4256,7 +4371,7 @@ document.getElementById("expandAll").addEventListener("click", () => {
     if(dayPick) dayPick.value = normalized;
     await activateDailyDate(normalized);
     renderDaily(normalized);
-    alert(`თარიღი ${normalized} აღდგა/გაიხსნა. ახლა შეგიძლიათ "არქივში გადატანა".`);
+    alert(`თარიღი ${normalized} აღდგა/გაიხსნა.`);
   }
   async function activateDailyDate(dateStr){
     if(!dateStr) return;
@@ -4264,20 +4379,68 @@ document.getElementById("expandAll").addEventListener("click", () => {
     renderDaily(dateStr);
     watchDayFromFirestore(dateStr);
   }
+  async function saveCurrentEntry(){
+    const dateStr = getCurrentDay();
+    const existing = dailyEdit.id ? loadDay(dateStr).find(entry => entry.id === dailyEdit.id) : null;
+    if(dailyEdit.id && !existing){
+      alert("რედაქტირებადი ჩანაწერი ვერ მოიძებნა. შესაძლოა დღე შეცვალე.");
+      exitEditMode();
+      renderDaily(dateStr);
+      return;
+    }
+
+    const candidate = buildEntryFromForm(existing ? {
+      id: existing.id,
+      createdAt: existing.createdAt,
+      createdAtLocal: existing.createdAtLocal
+    } : null);
+    if(!candidate) return;
+
+    if(isDuplicate(dateStr, candidate, existing?.id || "")){
+      const msg = existing ? "ეს განახლება დუბლიკატს შექმნის დღიურ ცხრილში. განვაგრძოთ?" : "ეს ჩანაწერი უკვე არსებობს დღიურ ცხრილში. დავამატო მაინც?";
+      if(!window.confirm(msg)) return;
+    }
+
+    const entries = loadDay(dateStr);
+    if(existing){
+      const idx = entries.findIndex(entry => entry.id === existing.id);
+      if(idx >= 0) entries[idx] = candidate;
+    }else{
+      entries.push(candidate);
+    }
+    saveDay(dateStr, entries);
+    await syncDailyDayToFirestore(dateStr);
+    renderDaily(dateStr);
+    const archiveResult = await archiveDayByDate(dateStr, {
+      askDoctor:false,
+      allowMissingOrdererMeta:true
+    });
+    if(!archiveResult.ok){
+      alert("ჩანაწერი დღიურ ცხრილში შეინახა, მაგრამ არქივში შენახვა ვერ დასრულდა.");
+      return;
+    }
+    renderDaily(dateStr);
+    exitEditMode();
+    document.getElementById("resetChecks")?.click();
+    renderDaily(dateStr);
+    renderArchive();
+    if(!archiveResult.remoteOk){
+      alert("შენახულია ლოკალურად და არქივში. Firebase სინქი მოგვიანებით განმეორდება.");
+    }
+  }
   async function initDailyArchive(){
     const dayPick = document.getElementById("dayPick");
-    const addBtn = document.getElementById("addToDaily");
+    const saveBtn = document.getElementById("saveEntry");
     const archiveSearch = document.getElementById("archiveSearch");
     const cancelBtn = document.getElementById("cancelEdit");
     const toggleDaily = document.getElementById("toggleDaily");
     const printDailyBtn = document.getElementById("printDaily");
     const clearDailyBtn = document.getElementById("clearDaily");
-    const archiveBtn = document.getElementById("archiveDaily");
     const restoreBtn = document.getElementById("restoreDailyByDate");
     const toggleArchive = document.getElementById("toggleArchive");
     const archiveCard = document.getElementById("archiveCard");
     const dailyCard = document.getElementById("dailyCard");
-    if(!(dayPick && addBtn)) return;
+    if(!(dayPick && saveBtn)) return;
 
     if(IS_ARCHIVE_VIEW){
       clearDailyWatch();
@@ -4308,42 +4471,10 @@ document.getElementById("expandAll").addEventListener("click", () => {
       await activateDailyDate(dayPick.value);
     });
 
-    addBtn.addEventListener("click", () => {
-      const dateStr = getCurrentDay();
-      const existing = dailyEdit.id ? loadDay(dateStr).find(entry => entry.id === dailyEdit.id) : null;
-      if(dailyEdit.id && !existing){
-        alert("რედაქტირებადი ჩანაწერი ვერ მოიძებნა. შესაძლოა დღე შეცვალე.");
-        exitEditMode();
-        renderDaily(dateStr);
-        return;
-      }
-
-      const candidate = buildEntryFromForm(existing ? {
-        id: existing.id,
-        createdAt: existing.createdAt,
-        createdAtLocal: existing.createdAtLocal
-      } : null);
-      if(!candidate) return;
-
-      if(isDuplicate(dateStr, candidate, existing?.id || "")){
-        const msg = existing ? "ეს განახლება დუბლიკატს შექმნის დღიურ ცხრილში. განვაგრძოთ?" : "ეს ჩანაწერი უკვე არსებობს დღიურ ცხრილში. დავამატო მაინც?";
-        if(!window.confirm(msg)) return;
-      }
-
-      const entries = loadDay(dateStr);
-      if(existing){
-        const idx = entries.findIndex(entry => entry.id === existing.id);
-        if(idx >= 0) entries[idx] = candidate;
-      }else{
-        entries.push(candidate);
-      }
-      saveDay(dateStr, entries);
-      renderDaily(dateStr);
-      if(existing){
-        exitEditMode();
-      }else{
-        document.getElementById("resetChecks")?.click();
-      }
+    saveBtn.addEventListener("click", async () => {
+      saveBtn.disabled = true;
+      await saveCurrentEntry();
+      saveBtn.disabled = false;
     });
 
     cancelBtn?.addEventListener("click", () => {
@@ -4364,7 +4495,6 @@ document.getElementById("expandAll").addEventListener("click", () => {
       if(dailyEdit.date === dateStr) exitEditMode();
       renderDaily(dateStr);
     });
-    archiveBtn?.addEventListener("click", archiveSelectedDay);
     restoreBtn?.addEventListener("click", restoreDayByPrompt);
   }
 
@@ -4451,6 +4581,15 @@ document.getElementById("expandAll").addEventListener("click", () => {
 
   async function bootstrapChecklist(){
     initChecklistFirestore();
+    configureArchiveLink();
+    if(IS_ARCHIVE_VIEW){
+      applyViewMode();
+      await initDailyArchive();
+      renderArchive();
+      await hydrateArchiveFromFirestore();
+      renderArchive();
+      return;
+    }
     await hydrateScopedStateFromFirestore();
     loadPatient();
     applyIncomingPatientContext();
@@ -4460,6 +4599,7 @@ document.getElementById("expandAll").addEventListener("click", () => {
     render();
     await initDailyArchive();
     await hydrateArchiveFromFirestore();
+    await autoArchiveExpiredDailyDays();
     await syncAllLocalArchiveDaysToFirestore();
     await syncAllLocalDaysToFirestore();
     renderArchive();
